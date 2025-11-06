@@ -107,6 +107,7 @@
 
     <!-- ================== PANEL: TAMPILKAN & CETAK ================== -->
     <section id="panel-laporan" class="hidden">
+      <!-- Filter -->
       <div class="grid md:grid-cols-4 gap-3 mb-4">
         <div>
           <label class="block font-semibold mb-1">Kelas</label>
@@ -136,23 +137,60 @@
         </div>
       </div>
 
-      <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
+      <!-- Aksi -->
+      <div class="flex items-center gap-3">
+        <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">
+          Tampilkan
+        </button>
+        <button id="btnCetak" class="no-print px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Cetak
+        </button>
+        <button id="btnPdfWa" class="no-print px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+          Buat PDF & Kirim WA
+        </button>
+      </div>
 
-      <div class="overflow-x-auto mt-4">
-        <table class="w-full bg-white border">
-          <thead class="bg-gray-100">
-            <tr>
-              <th class="p-2 border">No</th>
-              <th class="p-2 border">Nama Santri</th>
-              <th class="p-2 border">Kelas</th>
-              <th class="p-2 border">Pelanggaran</th>
-              <th class="p-2 border">Tanggal</th>
-              <th class="p-2 border">Jam</th>
-              <th class="p-2 border">Keterangan</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyLaporan"></tbody>
-        </table>
+      <!-- Area yang dicetak -->
+      <div id="lap-wrap" class="mt-4 bg-white p-4 border rounded">
+        <!-- Header laporan -->
+        <div class="text-center mb-4">
+          <h2 class="text-xl font-semibold">Laporan Pelanggaran Santri</h2>
+          <div id="lap-meta" class="text-sm text-gray-600 mt-1">
+            <!-- diisi lewat JS: Kelas / Santri / Bulan – Tahun -->
+          </div>
+        </div>
+
+        <!-- Table laporan -->
+        <div class="overflow-x-auto">
+          <table id="lap-table" class="w-full bg-white border">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-2 border w-14">No</th>
+                <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico">⇅</span></th>
+                <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico">⇅</span></th>
+                <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico">⇅</span></th>
+                <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico">⇅</span></th>
+                <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico">⇅</span></th>
+                <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico">⇅</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyLaporan"></tbody>
+          </table>
+        </div>
+
+        <!-- Footer tanda tangan (opsional) -->
+        <div class="grid grid-cols-2 gap-4 mt-8 text-sm">
+          <div class="text-center">
+            <div>Mengetahui,</div>
+            <div class="mt-14 font-medium">__________________________</div>
+            <div>Wali Kelas / Musyrif</div>
+          </div>
+          <div class="text-center">
+            <div>Kudus, <span id="lap-today"></span></div>
+            <div class="mt-14 font-medium">__________________________</div>
+            <div>Bag. Kamtib / Pembina</div>
+          </div>
+        </div>
       </div>
     </section>
   </div>
