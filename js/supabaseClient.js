@@ -42,4 +42,49 @@ export default async function handler(req, res) {
   }
 }
 
+// selectedClassId = value dari dropdown (UUID kelas)
+// rows = array hasil form per siswa (tiap baris: student_id, violation, time_at, date_at, notes)
+
+const payload = rows
+  .filter(r => r.violation && r.violation.trim() !== '')
+  .map(r => ({
+    student_id: r.student_id,          // UUID siswa
+    class_id: selectedClassId,         // <-- WAJIB: id kelas terpilih
+    violation: r.violation,
+    time_at: r.time || null,           // format 'HH:mm' aman
+    date_at: r.date || null,           // format 'YYYY-MM-DD'
+    notes: r.notes || null
+  }));
+
+const { error } = await supabase.from('violations').insert(payload);
+if (error) { /* tampilkan alert error.message */ }
+
+const { data: srow } = await supabase
+  .from('students')
+  .select('id, class_id')
+  .eq('id', selectedStudentId)
+  .single();
+
+await supabase.from('violations').insert([{
+  student_id: srow.id,
+  class_id: srow.class_id,     // <-- ikutkan class_id milik siswa tsb
+  violation, time_at, date_at, notes
+}]);
+
+let q = supabase.from('v_violations_expanded').select('*');
+
+// filter kelas
+if (selectedClassId) q = q.eq('class_id', selectedClassId);
+
+// filter santri (opsional)
+if (selectedStudentId) q = q.eq('student_id', selectedStudentId);
+
+// filter bulan & tahun (opsional)
+if (bulan && tahun) {
+  const start = `${tahun}-${String(bulan).padStart(2,'0')}-01`;
+  const end   = `${tahun}-${String(bulan).padStart(2,'0')}-31`; // praktis cukup
+  q = q.gte('date_at', start).lte('date_at', end);
+}
+
+const { data, error } = await q.order('date_at', { ascending: false });
 
