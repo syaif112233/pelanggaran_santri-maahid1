@@ -6,6 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- di <head> -->
+<style>
+  /* Print A4 landscape */
+  @media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    body * { visibility: hidden !important; }
+    #lap-wrap, #lap-wrap * { visibility: visible !important; }
+    #lap-wrap { position: absolute; inset: 0; padding: 0; }
+    #lap-table thead { display: table-header-group; }
+    #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
+  }
+  th[data-sort] { cursor:pointer; user-select:none; }
+  .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
+</style>
+
 </head>
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-6">
