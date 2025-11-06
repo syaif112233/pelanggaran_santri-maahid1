@@ -43,6 +43,16 @@ const lapTahun   = document.getElementById('lapTahun')
 const btnTampil  = document.getElementById('btnTampilkan')
 const tbodyLap   = document.getElementById('tbodyLaporan')
 
+// ===== (tambahan) refs panel SANTRI =====
+const sanKelas       = document.getElementById('sanKelas')
+const sanSantri      = document.getElementById('sanSantri')
+const sanPelanggaran = document.getElementById('sanPelanggaran')
+const sanJam         = document.getElementById('sanJam')
+const sanTanggal     = document.getElementById('sanTanggal')
+const sanKet         = document.getElementById('sanKet')
+const sanSimpan      = document.getElementById('sanSimpan')
+
+
 /* ============= data loaders ============= */
 async function loadClasses() {
   const { data, error } = await supabase.from('classes').select('id, kelas').order('kelas')
@@ -52,6 +62,13 @@ async function loadClasses() {
   // dropdown “Laporan”
   lapKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
 }
+
+async function fillSantriClassDropdown() {
+  const { data, error } = await supabase.from('classes').select('id, kelas').order('kelas')
+  if (error) { showAlert(error.message, false); return }
+  sanKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
+}
+
 
 async function loadStudentsByClass(classId) {
   const { data, error } = await supabase
