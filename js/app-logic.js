@@ -192,9 +192,6 @@ function fillMonthYearDropdowns() {
   }
 }
 
-function monthToTwoDigits(val) { ... }
-function lastDayOfMonthYYYYMMDD(year, mm2) { ... }
-
 function formatIndoDate(iso) {
   if (!iso) return ''
   // biar sederhana tampilkan apa adanya (YYYY-MM-DD). Kalau mau lokal:
