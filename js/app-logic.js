@@ -302,16 +302,16 @@ btnPdfWa.addEventListener('click', async () => {
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
   }
 
-  // cara yang benar untuk ambil Blob di html2pdf v0.10.x
-  const blob = await html2pdf()
-    .set(opt)
-    .from(lapWrap)
-    .toPdf()
-    .get('pdf')
-    .then(pdf => pdf.output('blob'))
+    // cara aman: ambil arraybuffer lalu buat Blob sendiri (hindari RangeError)
+  const worker = html2pdf().set(opt).from(lapWrap).toPdf()
+  const pdf = await worker.get('pdf')                     // ambil jsPDF instance
+  const arrayBuffer = pdf.output('arraybuffer')           // hasilkan ArrayBuffer
+  const blob = new Blob([arrayBuffer], { type: 'application/pdf' }) // buat Blob manual
 
+  // ubah ke base64 untuk upload
   const buf = await blob.arrayBuffer()
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+
 
   // upload ke route serverless kamu: /api/upload-report
   try {
