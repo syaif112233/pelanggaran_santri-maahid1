@@ -289,32 +289,32 @@ btnPdfWa.addEventListener('click', async () => {
       return
     }
 
-    // 1) Render elemen laporan ke canvas pakai html2canvas (v1.4.1)
-    const canvas = await window.html2canvas(lapWrap, {
-      scale: 2,            // kualitas tinggi
-      useCORS: true,       // kalau ada gambar ber-domain lain
+    // Render elemen ke canvas
+    const canvas = await html2canvas(lapWrap, {
+      scale: 2,
+      useCORS: true,
       backgroundColor: '#ffffff'
     })
 
-    // 2) Convert canvas ke image (JPEG) lalu masukkan ke jsPDF
+    // Konversi canvas ke gambar JPEG
     const imgData = canvas.toDataURL('image/jpeg', 0.98)
     const { jsPDF } = window.jspdf
     const pdf = new jsPDF('landscape', 'mm', 'a4')
 
-    const pageW = pdf.internal.pageSize.getWidth()
-    const pageH = pdf.internal.pageSize.getHeight()
-    const imgW = pageW
-    const imgH = (canvas.height * imgW) / canvas.width
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const imgWidth = pageWidth
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
 
-    // kalau tinggi gambar > tinggi halaman, tetap dipaksa muat satu halaman
-    const drawH = Math.min(imgH, pageH)
-    pdf.addImage(imgData, 'JPEG', 0, 0, imgW, drawH)
+    // Gambar ke halaman PDF
+    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight)
 
-    // 3) Hasilkan ArrayBuffer → base64 → upload
+    // Ambil array buffer lalu ubah ke base64
     const arrayBuffer = pdf.output('arraybuffer')
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
-
     const filename = `laporan-pelanggaran-${Date.now()}.pdf`
+
+    // Upload ke serverless route kamu
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -323,19 +323,20 @@ btnPdfWa.addEventListener('click', async () => {
     const json = await res.json()
     if (!res.ok) throw new Error(json?.error || 'Upload gagal')
 
+    // Sukses: tampilkan link WA
     const url = json.publicUrl
-    showAlert('PDF berhasil dibuat.', true)
-
     const ringkasan = lapSubtitle?.textContent?.trim() || ''
     const text = encodeURIComponent(
       `Assalamu'alaikum. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
     )
     window.open(`https://wa.me/?text=${text}`, '_blank')
+    showAlert('PDF berhasil dibuat dan siap dikirim.', true)
   } catch (e) {
-    showAlert(e?.message || 'Gagal membuat/mengunggah PDF', false)
+    showAlert(e.message || 'Gagal membuat PDF', false)
     console.error(e)
   }
 })
+
 
 /* ================= init ================= */
 ;(async function init() {
