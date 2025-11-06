@@ -15,8 +15,8 @@ export default async function handler(req, res) {
     const { filename, base64 } = req.body || {};
     if (!filename || !base64) return res.status(400).json({ error: 'filename & base64 required' });
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY;
+    const SUPABASE_URL = process.env.https://qjcnqeyrzryuclwpmala.supabase.co;
+    const SERVICE_KEY   = process.env.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqY25xZXlyenJ5dWNsd3BtYWxhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjQwMjA2OCwiZXhwIjoyMDc3OTc4MDY4fQ.J8lJDXY7sUxG_jUlPxTHZwWOeyuQgS7ahklX-_Ab0-4;
     const supa = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // pastikan bucket ada
