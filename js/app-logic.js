@@ -13,11 +13,12 @@ function showAlert(message, ok = true) {
 function hideAlert(){ alertBox.classList.add('hidden') }
 
 /* ============= tab switching ============= */
-const tabKelas = document.getElementById('tab-kelas')
-const tabSantri = document.getElementById('tab-santri')
+const tabKelas   = document.getElementById('tab-kelas')
+const tabSantri  = document.getElementById('tab-santri')
 const tabLaporan = document.getElementById('tab-laporan')
-const panelKelas = document.getElementById('panel-kelas')
-const panelSantri = document.getElementById('panel-santri')
+
+const panelKelas   = document.getElementById('panel-kelas')
+const panelSantri  = document.getElementById('panel-santri')
 const panelLaporan = document.getElementById('panel-laporan')
 
 function switchTab(target){
@@ -27,23 +28,20 @@ function switchTab(target){
   target.panel.classList.remove('hidden')
   hideAlert()
 }
-tabKelas.onclick   = () => switchTab({button:tabKelas, panel:panelKelas})
-tabSantri.onclick  = () => switchTab({button:tabSantri, panel:panelSantri})
-tabLaporan.onclick = () => switchTab({button:tabLaporan, panel:panelLaporan})
 
-/* ============= DOM refs ============= */
-const selectKelas  = document.getElementById('selectKelas')
-const tbodyKelas   = document.getElementById('tbodyKelas')
-const btnSimpan    = document.getElementById('btnSimpanKelas')
+/* ============= DOM refs (KELAS & LAPORAN) ============= */
+const selectKelas = document.getElementById('selectKelas')
+const tbodyKelas  = document.getElementById('tbodyKelas')
+const btnSimpan   = document.getElementById('btnSimpanKelas')
 
-const lapKelas   = document.getElementById('lapKelas')
-const lapSantri  = document.getElementById('lapSantri')
-const lapBulan   = document.getElementById('lapBulan')
-const lapTahun   = document.getElementById('lapTahun')
-const btnTampil  = document.getElementById('btnTampilkan')
-const tbodyLap   = document.getElementById('tbodyLaporan')
+const lapKelas  = document.getElementById('lapKelas')
+const lapSantri = document.getElementById('lapSantri')
+const lapBulan  = document.getElementById('lapBulan')
+const lapTahun  = document.getElementById('lapTahun')
+const btnTampil = document.getElementById('btnTampilkan')
+const tbodyLap  = document.getElementById('tbodyLaporan')
 
-// ===== (tambahan) refs panel SANTRI =====
+/* ============= DOM refs (SANTRI) ============= */
 const sanKelas       = document.getElementById('sanKelas')
 const sanSantri      = document.getElementById('sanSantri')
 const sanPelanggaran = document.getElementById('sanPelanggaran')
@@ -51,7 +49,6 @@ const sanJam         = document.getElementById('sanJam')
 const sanTanggal     = document.getElementById('sanTanggal')
 const sanKet         = document.getElementById('sanKet')
 const sanSimpan      = document.getElementById('sanSimpan')
-
 
 /* ============= data loaders ============= */
 async function loadClasses() {
@@ -69,7 +66,6 @@ async function fillSantriClassDropdown() {
   sanKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
 }
 
-
 async function loadStudentsByClass(classId) {
   const { data, error } = await supabase
     .from('students')
@@ -80,7 +76,7 @@ async function loadStudentsByClass(classId) {
   return data || []
 }
 
-/* ============= renderers ============= */
+/* ============= renderers (KELAS) ============= */
 function renderKelasRows(students) {
   const today = new Date().toISOString().slice(0,10)
   tbodyKelas.innerHTML = students.map(s => `
@@ -141,7 +137,72 @@ btnSimpan.addEventListener('click', async () => {
   tbodyKelas.querySelectorAll('input[name="time"]').forEach(i => i.value = '')
 })
 
+/* ============= events: Input per Santri ============= */
+// buka tab Santri → isi dropdown kelas & santri
+tabSantri.onclick = async () => {
+  switchTab({button:tabSantri, panel:panelSantri})
+  await fillSantriClassDropdown()
+  sanTanggal.value = new Date().toISOString().slice(0,10)
+
+  if (sanKelas.value) {
+    const students = await loadStudentsByClass(sanKelas.value)
+    sanSantri.innerHTML = `<option value="">-- Pilih santri --</option>` +
+      students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+  }
+}
+
+// ganti kelas → muat santri
+sanKelas.addEventListener('change', async () => {
+  const students = await loadStudentsByClass(sanKelas.value)
+  sanSantri.innerHTML = `<option value="">-- Pilih santri --</option>` +
+    students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+})
+
+// simpan pelanggaran single
+sanSimpan.addEventListener('click', async () => {
+  hideAlert()
+
+  const classId   = sanKelas.value
+  const studentId = sanSantri.value
+  const violation = sanPelanggaran.value.trim()
+  const time_at   = sanJam.value || null
+  const date_at   = sanTanggal.value || null
+  const notes     = sanKet.value.trim() || null
+
+  if (!classId)   return showAlert('Pilih kelas.', false)
+  if (!studentId) return showAlert('Pilih santri.', false)
+  if (!violation) return showAlert('Isi pelanggaran.', false)
+
+  // pastikan class_id siswa ikut (hindari NOT NULL di violations.class_id)
+  const { data: srow, error: sErr } = await supabase
+    .from('students').select('id, class_id').eq('id', studentId).single()
+
+  if (sErr) return showAlert(sErr.message, false)
+
+  const payload = {
+    student_id: srow.id,
+    class_id  : srow.class_id || classId,
+    violation,
+    time_at,
+    date_at,
+    notes
+  }
+
+  const { error } = await supabase.from('violations').insert([payload])
+  if (error) return showAlert(error.message, false)
+
+  showAlert('Pelanggaran berhasil disimpan.')
+  // reset input
+  sanPelanggaran.value = ''
+  sanJam.value = ''
+  sanTanggal.value = new Date().toISOString().slice(0,10)
+  sanKet.value = ''
+})
+
 /* ============= events: Laporan ============= */
+tabKelas.onclick   = () => switchTab({button:tabKelas, panel:panelKelas})
+tabLaporan.onclick = () => switchTab({button:tabLaporan, panel:panelLaporan})
+
 lapKelas.addEventListener('change', async () => {
   const classId = lapKelas.value
   const students = await loadStudentsByClass(classId)
@@ -168,7 +229,7 @@ btnTampil.addEventListener('click', async () => {
   if (error) return showAlert(error.message, false)
 
   const rows = data || []
-  const html = rows.map((r, i) => `
+  tbodyLap.innerHTML = rows.map((r, i) => `
     <tr>
       <td class="p-2 border">${i+1}</td>
       <td class="p-2 border">${r.student_name || ''}</td>
@@ -179,18 +240,20 @@ btnTampil.addEventListener('click', async () => {
       <td class="p-2 border">${r.notes || ''}</td>
     </tr>
   `).join('')
-  document.getElementById('tbodyLaporan').innerHTML = html
+
   showAlert(`Menampilkan ${rows.length} data.`)
 })
 
 /* ============= init ============= */
 ;(async function init(){
   await loadClasses()
+
   // render pertama untuk tab Input per Kelas
   if (selectKelas.value) {
     const students = await loadStudentsByClass(selectKelas.value)
     renderKelasRows(students)
   }
+
   // default tahun laporan
   lapTahun.value = new Date().getFullYear()
 })()
