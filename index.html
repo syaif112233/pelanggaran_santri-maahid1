@@ -1,12 +1,68 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pelanggaran Santri</title>
-  </head>
-  <body>
-    <h1>Deploy sukses 🎉</h1>
-    <p>Proyek siap dihubungkan ke Supabase.</p>
-  </body>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sistem Pelanggaran Santri</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+  <div class="container mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6 text-center text-blue-700">📘 Sistem Pelanggaran Santri</h1>
+
+    <div id="status" class="p-4 mb-4 rounded-md bg-blue-50 border border-blue-300 text-blue-700">
+      Menghubungkan ke database Supabase...
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-4">Daftar Pelanggaran</h2>
+      <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="px-4 py-2 text-left">No</th>
+            <th class="px-4 py-2 text-left">Nama Santri</th>
+            <th class="px-4 py-2 text-left">Kelas</th>
+            <th class="px-4 py-2 text-left">Pelanggaran</th>
+          </tr>
+        </thead>
+        <tbody id="pelanggaranTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './js/supabaseClient.js'
+
+    const statusEl = document.getElementById('status')
+    const tbody = document.getElementById('pelanggaranTableBody')
+
+    async function loadData() {
+      statusEl.textContent = '🔄 Mengambil data...'
+      const { data, error } = await supabase
+        .from('data_pelanggaran')
+        .select('No, NamaSantri, Kelas, Pelanggaran')
+        .limit(10)
+
+      if (error) {
+        console.error(error)
+        statusEl.textContent = '❌ Gagal memuat data: ' + error.message
+        return
+      }
+
+      statusEl.textContent = '✅ Terhubung ke Supabase. Menampilkan 10 data terbaru.'
+      tbody.innerHTML = data.map((row, i) => `
+        <tr class="border-b">
+          <td class="px-4 py-2">${row.No ?? i + 1}</td>
+          <td class="px-4 py-2">${row.NamaSantri}</td>
+          <td class="px-4 py-2">${row.Kelas}</td>
+          <td class="px-4 py-2">${row.Pelanggaran}</td>
+        </tr>
+      `).join('')
+    }
+
+    loadData()
+  </script>
+</body>
 </html>
