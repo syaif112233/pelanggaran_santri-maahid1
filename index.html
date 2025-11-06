@@ -2,461 +2,108 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Sistem Pelanggaran Santri</title>
-  <link rel="icon" href="https://placehold.co/32x32/2563eb/ffffff?text=SP" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase JS -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <!-- pdfmake (client-side PDF) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
-  <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;}
-    .tab-btn.active { border-color:#2563eb; color:#2563eb; }
-    .spinner { border: 4px solid #e5e7eb; border-top: 4px solid #2563eb; border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite;}
-    @keyframes spin { to { transform: rotate(360deg);} }
-    @media print {
-      @page { size: A4 landscape; margin: 10mm; }
-      body * { visibility: hidden !important; }
-      #print-area, #print-area * { visibility: visible !important; }
-      #print-area { position:absolute; inset:0; padding:0; }
-      #print-table thead { display: table-header-group; }
-      #print-table tr, #print-table th, #print-table td { page-break-inside: avoid; }
-    }
-  </style>
 </head>
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-6">
-    <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Sistem Pelanggaran Santri</h1>
+    <h1 class="text-3xl font-bold text-center mb-6">Sistem Pelanggaran Santri</h1>
 
     <!-- Tabs -->
-    <div class="flex border-b mb-6">
-      <button class="tab-btn px-4 py-2 border-b-2 active" data-tab="tab-kelas">Input per Kelas</button>
-      <button class="tab-btn px-4 py-2 border-b-2 text-gray-600" data-tab="tab-santri">Input per Santri</button>
-      <button class="tab-btn px-4 py-2 border-b-2 text-gray-600" data-tab="tab-laporan">Tampilkan & Cetak</button>
+    <div class="flex gap-4 border-b mb-6">
+      <button id="tab-kelas" class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
+      <button id="tab-santri" class="py-2 text-gray-600">Input per Santri</button>
+      <button id="tab-laporan" class="py-2 text-gray-600">Tampilkan & Cetak</button>
     </div>
 
-    <!-- Alerts -->
-    <div id="alert" class="hidden mb-4 p-3 rounded border"></div>
+    <!-- Alert -->
+    <div id="alert" class="hidden mb-4 p-3 rounded border text-sm"></div>
 
-    <!-- Loading -->
-    <div id="loading" class="hidden w-full flex justify-center my-6"><div class="spinner"></div></div>
+    <!-- ================== PANEL: INPUT PER KELAS ================== -->
+    <section id="panel-kelas">
+      <label class="block font-semibold mb-2">Pilih Kelas</label>
+      <select id="selectKelas" class="w-full max-w-sm border rounded px-3 py-2 mb-4"></select>
 
-    <!-- ============ TAB: INPUT PER KELAS ============ -->
-    <section id="tab-kelas">
-      <div class="grid gap-4">
-        <div>
-          <label class="font-semibold">Pilih Kelas</label>
-          <select id="kelas-kelas" class="mt-1 w-full border rounded p-2"></select>
-        </div>
-
-        <div id="table-wrapper" class="hidden">
-          <div class="overflow-x-auto border rounded">
-            <table class="min-w-full text-sm">
-              <thead class="bg-gray-100">
-                <tr>
-                  <th class="p-2 text-left">Nama Santri</th>
-                  <th class="p-2 text-left">Pelanggaran</th>
-                  <th class="p-2 text-left">Jam</th>
-                  <th class="p-2 text-left">Tanggal</th>
-                  <th class="p-2 text-left">Keterangan</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-kelas"></tbody>
-            </table>
-          </div>
-          <button id="btn-save-kelas" class="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Simpan Pelanggaran</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ TAB: INPUT PER SANTRI ============ -->
-    <section id="tab-santri" class="hidden">
-      <div class="grid gap-4">
-        <div>
-          <label class="font-semibold">Pilih Kelas</label>
-          <select id="kelas-santri" class="mt-1 w-full border rounded p-2"></select>
-        </div>
-        <div class="hidden" id="santri-select-wrap">
-          <label class="font-semibold">Pilih Santri</label>
-          <select id="santri-select" class="mt-1 w-full border rounded p-2"></select>
-        </div>
-
-        <div class="hidden" id="form-santri">
-          <div>
-            <label class="font-semibold">Pelanggaran</label>
-            <input id="pelanggaran-santri" class="mt-1 w-full border rounded p-2" />
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="font-semibold">Jam</label>
-              <input id="jam-santri" type="time" class="mt-1 w-full border rounded p-2" />
-            </div>
-            <div>
-              <label class="font-semibold">Tanggal</label>
-              <input id="tanggal-santri" type="date" class="mt-1 w-full border rounded p-2" />
-            </div>
-          </div>
-          <div>
-            <label class="font-semibold">Keterangan</label>
-            <textarea id="ket-santri" class="mt-1 w-full border rounded p-2" rows="3"></textarea>
-          </div>
-          <button id="btn-save-santri" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Simpan</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ TAB: LAPORAN ============ -->
-    <section id="tab-laporan" class="hidden">
-      <div class="grid gap-4">
-        <div>
-          <label class="font-semibold">Pilih Kelas</label>
-          <select id="lap-kelas" class="mt-1 w-full border rounded p-2"></select>
-        </div>
-        <div class="hidden" id="lap-santri-wrap">
-          <label class="font-semibold">Pilih Santri</label>
-          <select id="lap-santri" class="mt-1 w-full border rounded p-2"></select>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden" id="periode-wrap">
-          <div>
-            <label class="font-semibold">Bulan</label>
-            <select id="lap-bulan" class="mt-1 w-full border rounded p-2"></select>
-          </div>
-          <div>
-            <label class="font-semibold">Tahun</label>
-            <select id="lap-tahun" class="mt-1 w-full border rounded p-2"></select>
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-          <button id="btn-tampil" class="bg-emerald-600 text-white py-2 px-4 rounded hover:bg-emerald-700">Tampilkan</button>
-          <button id="btn-print" class="bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700">Cetak</button>
-          <button id="btn-wa" class="bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 hidden">Buat PDF & Kirim WA</button>
-        </div>
-
-        <div class="overflow-x-auto border rounded">
-          <table class="min-w-full text-sm" id="tabel-laporan">
-            <thead class="bg-gray-100">
-              <tr>
-                <th class="p-2 text-left">No</th>
-                <th class="p-2 text-left">Nama Santri</th>
-                <th class="p-2 text-left">Kelas</th>
-                <th class="p-2 text-left">Pelanggaran</th>
-                <th class="p-2 text-left">Tanggal</th>
-                <th class="p-2 text-left">Jam</th>
-                <th class="p-2 text-left">Keterangan</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-laporan"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- area khusus print -->
-      <div id="print-area" class="hidden">
-        <h2 class="text-xl font-bold mb-2" id="print-title"></h2>
-        <p class="mb-4 text-sm text-gray-600" id="print-subtitle"></p>
-        <table class="min-w-full text-xs" id="print-table">
-          <thead>
+      <div class="overflow-x-auto">
+        <table class="w-full bg-white border">
+          <thead class="bg-gray-100">
             <tr>
-              <th class="p-2 text-left border">No</th>
-              <th class="p-2 text-left border">Nama Santri</th>
-              <th class="p-2 text-left border">Kelas</th>
-              <th class="p-2 text-left border">Pelanggaran</th>
-              <th class="p-2 text-left border">Tanggal</th>
-              <th class="p-2 text-left border">Jam</th>
-              <th class="p-2 text-left border">Keterangan</th>
+              <th class="p-2 border">Nama Santri</th>
+              <th class="p-2 border">Pelanggaran</th>
+              <th class="p-2 border">Jam</th>
+              <th class="p-2 border">Tanggal</th>
+              <th class="p-2 border">Keterangan</th>
             </tr>
           </thead>
-          <tbody id="print-tbody"></tbody>
+          <tbody id="tbodyKelas"></tbody>
+        </table>
+      </div>
+
+      <button id="btnSimpanKelas" class="mt-4 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Simpan Pelanggaran
+      </button>
+    </section>
+
+    <!-- ================== PANEL: INPUT PER SANTRI (placeholder) ================== -->
+    <section id="panel-santri" class="hidden">
+      <p class="text-gray-500">(Opsi per santri bisa ditambahkan kemudian)</p>
+    </section>
+
+    <!-- ================== PANEL: TAMPILKAN & CETAK ================== -->
+    <section id="panel-laporan" class="hidden">
+      <div class="grid md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label class="block font-semibold mb-1">Kelas</label>
+          <select id="lapKelas" class="w-full border rounded px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Santri (opsional)</label>
+          <select id="lapSantri" class="w-full border rounded px-3 py-2">
+            <option value="">Semua Santri</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Bulan</label>
+          <select id="lapBulan" class="w-full border rounded px-3 py-2">
+            <option value="">Semua</option>
+            <option value="01">Januari</option><option value="02">Februari</option>
+            <option value="03">Maret</option><option value="04">April</option>
+            <option value="05">Mei</option><option value="06">Juni</option>
+            <option value="07">Juli</option><option value="08">Agustus</option>
+            <option value="09">September</option><option value="10">Oktober</option>
+            <option value="11">November</option><option value="12">Desember</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Tahun</label>
+          <input id="lapTahun" type="number" class="w-full border rounded px-3 py-2" placeholder="2025" />
+        </div>
+      </div>
+
+      <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
+
+      <div class="overflow-x-auto mt-4">
+        <table class="w-full bg-white border">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="p-2 border">No</th>
+              <th class="p-2 border">Nama Santri</th>
+              <th class="p-2 border">Kelas</th>
+              <th class="p-2 border">Pelanggaran</th>
+              <th class="p-2 border">Tanggal</th>
+              <th class="p-2 border">Jam</th>
+              <th class="p-2 border">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyLaporan"></tbody>
         </table>
       </div>
     </section>
   </div>
 
-<script>
-/** ========= KONFIGURASI =========
- * Pastikan 3 variabel env ini sudah diset di Vercel:
- * SUPABASE_URL, SUPABASE_ANON_KEY  (public)
- * (server side: SUPABASE_SERVICE_KEY digunakan di /api/upload-report)
- */
-const supabaseUrl = window.__SUPABASE_URL__ || "https://qjcnqeyrzryuclwpmala.supabase.co";
-const supabaseAnon = window.__SUPABASE_ANON__ || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqY25xZXlyenJ5dWNsd3BtYWxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0MDIwNjgsImV4cCI6MjA3Nzk3ODA2OH0.WwYGa4gKjoJ8n4fuqpQifgpLPJxHlZuUbtdhiF0OGs8";
-const supa = supabase.createClient(supabaseUrl, supabaseAnon);
-
-// helpers UI
-const $ = (id) => document.getElementById(id);
-const show = (el) => el.classList.remove('hidden');
-const hide = (el) => el.classList.add('hidden');
-const setAlert = (msg, ok=true) => {
-  const box = $("alert");
-  box.textContent = msg;
-  box.className = ok
-    ? "mb-4 p-3 rounded border bg-emerald-50 text-emerald-800 border-emerald-300"
-    : "mb-4 p-3 rounded border bg-red-50 text-red-800 border-red-300";
-  show(box);
-  setTimeout(()=> hide(box), 4000);
-};
-const busy = (b=true) => b ? show($("loading")) : hide($("loading"));
-
-// Tabs
-document.querySelectorAll(".tab-btn").forEach(btn=>{
-  btn.onclick = () => {
-    document.querySelectorAll(".tab-btn").forEach(b=>{ b.classList.remove("active","text-gray-900"); b.classList.add("text-gray-600"); });
-    btn.classList.add("active","text-gray-900");
-    // sections
-    ["tab-kelas","tab-santri","tab-laporan"].forEach(id=>hide($(id)));
-    show($(btn.dataset.tab));
-  };
-});
-
-// dropdown bulan & tahun
-const bulanNames = ['Semua Bulan','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-$("lap-bulan").innerHTML = bulanNames.map((b,i)=>`<option value="${i}">${b}</option>`).join('');
-const yearNow = new Date().getFullYear();
-let optYears = `<option value="">Semua Tahun</option>`;
-for(let y=yearNow-5;y<=yearNow+1;y++) optYears += `<option value="${y}">${y}</option>`;
-$("lap-tahun").innerHTML = optYears;
-
-function monthYearFilter(){
-  const m = Number($("lap-bulan").value||0);
-  const y = $("lap-tahun").value;
-  if (m===0 || !y) return 'Semua Bulan';
-  return `${y}-${String(m).padStart(2,"0")}`;
-}
-
-// ====== Load Kelas (untuk semua tab)
-async function loadKelasInto(selectId, addAll=false){
-  busy(true);
-  const { data, error } = await supa.from("classes").select("id,name").order("name",{ascending:true});
-  busy(false);
-  const sel = $(selectId);
-  sel.innerHTML = "";
-  if (addAll) sel.innerHTML += `<option value="ALL">Semua Kelas</option>`;
-  if (error){ setAlert(error.message,false); return; }
-  data.forEach(k=> sel.innerHTML += `<option value="${k.id}">${k.name}</option>`);
-  sel.dispatchEvent(new Event("change"));
-}
-
-// ====== INPUT PER KELAS
-$("kelas-kelas").addEventListener("change", async ()=>{
-  const kelasId = $("kelas-kelas").value;
-  if (!kelasId){ hide($("table-wrapper")); return; }
-  busy(true);
-  // ambil seluruh siswa kelas tsb
-  const { data:students, error } = await supa.from("students").select("id,name").eq("class_id", kelasId).order("name");
-  busy(false);
-  if (error){ setAlert(error.message,false); return; }
-  const today = new Date().toISOString().slice(0,10);
-  const tbody = $("tbody-kelas");
-  tbody.innerHTML = students.map(s=>`
-    <tr data-id="${s.id}">
-      <td class="p-2 border">${s.name}</td>
-      <td class="p-2 border"><input class="w-full border rounded p-1" name="pel"/></td>
-      <td class="p-2 border"><input class="w-full border rounded p-1" type="time" name="jam"/></td>
-      <td class="p-2 border"><input class="w-full border rounded p-1" type="date" name="tgl" value="${today}"/></td>
-      <td class="p-2 border"><input class="w-full border rounded p-1" name="ket"/></td>
-    </tr>`).join("");
-  show($("table-wrapper"));
-});
-
-$("btn-save-kelas").onclick = async ()=>{
-  const rows = Array.from(document.querySelectorAll("#tbody-kelas tr"));
-  const payload = [];
-  rows.forEach(tr=>{
-    const student_id = tr.dataset.id;
-    const pel = tr.querySelector('input[name="pel"]').value.trim();
-    const jam = tr.querySelector('input[name="jam"]').value.trim();
-    const tgl = tr.querySelector('input[name="tgl"]').value.trim();
-    const ket = tr.querySelector('input[name="ket"]').value.trim();
-    if (pel) payload.push({ student_id, violation: pel, time_at: jam || null, date_at: tgl || null, notes: ket || null });
-  });
-  if (!payload.length){ setAlert("Tidak ada pelanggaran yang diisi.", false); return; }
-  busy(true);
-  const { error } = await supa.from("violations").insert(payload);
-  busy(false);
-  if (error) return setAlert(error.message,false);
-  setAlert(`${payload.length} data pelanggaran tersimpan.`);
-  $("kelas-kelas").dispatchEvent(new Event("change"));
-};
-
-// ====== INPUT PER SANTRI
-$("kelas-santri").addEventListener("change", async ()=>{
-  const kelasId = $("kelas-santri").value;
-  hide($("form-santri")); hide($("santri-select-wrap"));
-  if (!kelasId) return;
-  busy(true);
-  const { data:students, error } = await supa.from("students").select("id,name").eq("class_id", kelasId).order("name");
-  busy(false);
-  if (error){ setAlert(error.message,false); return; }
-  $("santri-select").innerHTML = `<option value="">-- Pilih Santri --</option>` + students.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
-  show($("santri-select-wrap"));
-});
-
-$("santri-select").addEventListener("change", ()=>{
-  const v = $("santri-select").value;
-  if (v){ $("tanggal-santri").value = new Date().toISOString().slice(0,10); show($("form-santri")); }
-  else hide($("form-santri"));
-});
-
-$("btn-save-santri").onclick = async ()=>{
-  const student_id = $("santri-select").value;
-  const violation = $("pelanggaran-santri").value.trim();
-  const time_at = $("jam-santri").value.trim() || null;
-  const date_at = $("tanggal-santri").value.trim() || null;
-  const notes = $("ket-santri").value.trim() || null;
-  if (!student_id || !violation) return setAlert("Mohon lengkapi data.", false);
-  busy(true);
-  const { error } = await supa.from("violations").insert([{ student_id, violation, time_at, date_at, notes }]);
-  busy(false);
-  if (error) return setAlert(error.message,false);
-  setAlert("Data pelanggaran tersimpan.");
-  $("pelanggaran-santri").value=""; $("jam-santri").value=""; $("ket-santri").value="";
-};
-
-// ====== LAPORAN
-let currentRows = []; // simpan hasil untuk print/PDF
-
-$("lap-kelas").addEventListener("change", async ()=>{
-  const kelasId = $("lap-kelas").value;
-  hide($("lap-santri-wrap")); hide($("periode-wrap"));
-  $("btn-wa").classList.add("hidden");
-  if (kelasId && kelasId !== "ALL"){
-    busy(true);
-    const { data:students, error } = await supa.from("students").select("id,name").eq("class_id", kelasId).order("name");
-    busy(false);
-    if (error){ setAlert(error.message,false); return; }
-    $("lap-santri").innerHTML = `<option value="ALL">Semua Santri</option>` + students.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
-    show($("lap-santri-wrap")); show($("periode-wrap"));
-    $("btn-wa").classList.remove("hidden"); // kirim WA hanya jika kelas spesifik
-  }
-});
-
-$("btn-tampil").onclick = async ()=>{
-  const kelasId = $("lap-kelas").value;
-  const studentId = $("lap-santri").value || "ALL";
-  const ym = monthYearFilter(); // 'Semua Bulan' atau 'YYYY-MM'
-  // ambil dari view yang sudah join
-  let query = supa.from("v_violations_expanded").select("student_name,class_name,violation,time_at,date_at,notes").order("date_at",{ascending:false});
-  if (kelasId && kelasId !== "ALL") query = query.eq("class_id", kelasId);
-  if (studentId && studentId !== "ALL") query = query.eq("student_id", studentId);
-  if (ym !== "Semua Bulan"){
-    const [Y,M] = ym.split("-");
-    const start = `${Y}-${M}-01`;
-    const end = new Date(Number(Y), Number(M), 1).toISOString().slice(0,10); // 1 bulan berikutnya (tanggal 01)
-    query = query.gte("date_at", start).lt("date_at", end);
-  }
-  busy(true);
-  const { data, error } = await query;
-  busy(false);
-  if (error){ setAlert(error.message,false); return; }
-  currentRows = data || [];
-  const tb = $("tbody-laporan");
-  tb.innerHTML = currentRows.map((r,i)=>`
-    <tr>
-      <td class="p-2 border">${i+1}</td>
-      <td class="p-2 border">${r.student_name}</td>
-      <td class="p-2 border">${r.class_name}</td>
-      <td class="p-2 border">${r.violation}</td>
-      <td class="p-2 border">${r.date_at || "-"}</td>
-      <td class="p-2 border">${r.time_at || "-"}</td>
-      <td class="p-2 border">${r.notes || "-"}</td>
-    </tr>`).join("");
-  setAlert(`Menampilkan ${currentRows.length} data terbaru.`);
-};
-
-// Cetak ke printer
-$("btn-print").onclick = ()=>{
-  const kelasId = $("lap-kelas").value;
-  const kelasText = $("#lap-kelas").selectedOptions[0]?.textContent || "Semua Kelas";
-  const studentId = $("lap-santri").value || "ALL";
-  const santriText = (studentId==="ALL") ? "Semua Santri" : $("#lap-santri").selectedOptions[0]?.textContent;
-  const periode = (function(){
-    const m = Number($("lap-bulan").value||0); const y = $("lap-tahun").value;
-    if (m===0 || !y) return "Periode: Semua Bulan";
-    return `Periode: ${bulanNames[m]} ${y}`;
-  })();
-  $("print-title").textContent = "Laporan Pelanggaran Santri";
-  $("print-subtitle").textContent = `Kelas: ${kelasText} | Santri: ${santriText} | ${periode}`;
-  $("print-tbody").innerHTML = currentRows.map((r,i)=>`
-    <tr>
-      <td class="p-2 border">${i+1}</td>
-      <td class="p-2 border">${r.student_name}</td>
-      <td class="p-2 border">${r.class_name}</td>
-      <td class="p-2 border">${r.violation}</td>
-      <td class="p-2 border">${r.date_at || "-"}</td>
-      <td class="p-2 border">${r.time_at || "-"}</td>
-      <td class="p-2 border">${r.notes || "-"}</td>
-    </tr>`).join("");
-  show($("print-area"));
-  window.print();
-  hide($("print-area"));
-};
-
-// Buat PDF + Upload ke Storage via API -> Kirim WA
-$("btn-wa").onclick = async ()=>{
-  const kelasId = $("lap-kelas").value;
-  if (!kelasId || kelasId==="ALL") return setAlert("Pilih kelas tertentu dulu.", false);
-  if (!currentRows.length) return setAlert("Tampilkan data dulu sebelum membuat PDF.", false);
-
-  // cari wali/nomor HP
-  busy(true);
-  const { data: waliData, error: waliErr } = await supa.from("homeroom_teachers").select("phone,classes!inner(name)").eq("classes.id", kelasId).single();
-  busy(false);
-  if (waliErr){ setAlert("Nomor wali kelas tidak ditemukan.", false); return; }
-  let phone = String(waliData?.phone||"").replace(/[^\d]/g,'');
-  if (phone.startsWith("0")) phone = "62"+phone.slice(1);
-  if (phone.startsWith("620")) phone = "62"+phone.slice(3);
-  if (phone.startsWith("8")) phone = "62"+phone;
-
-  // siapkan doc pdfmake
-  const body = [
-    [{text:"No",bold:true},{text:"Nama Santri",bold:true},{text:"Kelas",bold:true},{text:"Pelanggaran",bold:true},{text:"Tanggal",bold:true},{text:"Jam",bold:true},{text:"Keterangan",bold:true}],
-    ...currentRows.map((r,i)=>[String(i+1), r.student_name, r.class_name, r.violation, r.date_at||"-", r.time_at||"-", r.notes||"-"])
-  ];
-  const docDef = {
-    pageSize:"A4", pageOrientation:"landscape", pageMargins:[20,20,20,20],
-    content:[
-      {text:"Laporan Pelanggaran Santri", style:"h1"},
-      {text:new Date().toLocaleString("id-ID"), margin:[0,0,0,8], style:"sub"},
-      {table:{headerRows:1, widths:["auto","*","auto","*","auto","auto","*"], body}, layout:"lightHorizontalLines"}
-    ],
-    styles:{ h1:{fontSize:16,bold:true,margin:[0,0,0,4]}, sub:{fontSize:9,color:"#555"} }
-  };
-
-  const pdf = pdfMake.createPdf(docDef);
-  pdf.getBase64(async (b64)=>{
-    // upload ke /api/upload-report -> balikkan public URL
-    busy(true);
-    const fname = `Laporan_Pelanggaran_${Date.now()}.pdf`;
-    const res = await fetch("/api/upload-report", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ filename: fname, base64: b64 })
-    });
-    busy(false);
-    if (!res.ok){ setAlert("Gagal upload PDF.", false); return; }
-    const { publicUrl } = await res.json();
-
-    const message =
-`Assalamu'alaikum.
-Berikut *Laporan Pelanggaran Santri* kelas *${waliData.classes.name}*.
-Link PDF: ${publicUrl}`;
-    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, "_blank");
-    setAlert("Tautan WhatsApp dibuka. Silakan kirim pesan di WhatsApp.");
-  });
-};
-
-// INIT
-(async function init(){
-  // isi semua dropdown kelas
-  await loadKelasInto("kelas-kelas", false);
-  await loadKelasInto("kelas-santri", false);
-  await loadKelasInto("lap-kelas", true);
-})();
-</script>
+  <!-- Module scripts -->
+  <script type="module" src="./js/app-logic.js"></script>
 </body>
 </html>
