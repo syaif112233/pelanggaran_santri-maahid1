@@ -192,6 +192,9 @@ function fillMonthYearDropdowns() {
   }
 }
 
+function monthToTwoDigits(val) { ... }
+function lastDayOfMonthYYYYMMDD(year, mm2) { ... }
+
 function formatIndoDate(iso) {
   if (!iso) return ''
   // biar sederhana tampilkan apa adanya (YYYY-MM-DD). Kalau mau lokal:
@@ -201,6 +204,25 @@ function formatIndoDate(iso) {
   } catch {}
   return iso
 }
+function monthToTwoDigits(val) {
+  // kalau sudah "01".."12", kembalikan apa adanya
+  if (/^\d{1,2}$/.test(val)) return String(val).padStart(2, '0');
+  // mapping nama bulan → 2 digit
+  const map = {
+    Januari:'01', February:'02', Februari:'02', Maret:'03', April:'04', Mei:'05',
+    Juni:'06', Juli:'07', Agustus:'08', September:'09', Oktober:'10',
+    November:'11', Desember:'12',
+    'Semua':'', 'All':''
+  };
+  return map[val] ?? '';
+}
+
+function lastDayOfMonthYYYYMMDD(year, mm2) {
+  // new Date(year, monthIndex, 0) → hari terakhir bulan (monthIndex 1..12)
+  const last = new Date(Number(year), Number(mm2), 0).getDate();
+  return `${year}-${mm2}-${String(last).padStart(2,'0')}`;
+}
+
 
 /* ================= events: Laporan ================= */
 if (lapKelas) {
@@ -280,42 +302,40 @@ if (lapTable) {
 
 if (btnTampil) {
   btnTampil.addEventListener('click', async () => {
-    const classId = lapKelas.value
-    const studentId = lapSantri.value || null
-    const bulan = lapBulan.value
-    const tahun = lapTahun.value
+  const classId   = lapKelas.value;
+  const studentId = lapSantri.value || null;
 
-    let q = supabase.from('v_violations_expanded').select('*')
-    if (classId) q = q.eq('class_id', classId)
-    if (studentId) q = q.eq('student_id', studentId)
-    if (bulan && tahun) {
-      const start = `${tahun}-${bulan}-01`
-      const end = `${tahun}-${bulan}-31`
-      q = q.gte('date_at', start).lte('date_at', end)
-    }
+  const bulanRaw = lapBulan.value;
+  const bulan = monthToTwoDigits(bulanRaw);
+  const tahun = lapTahun.value;
 
-    const { data, error } = await q.order('date_at', { ascending: false })
-    if (error) return showAlert(error.message, false)
+  let q = supabase.from('v_violations_expanded').select('*');
+  if (classId)   q = q.eq('class_id', classId);
+  if (studentId) q = q.eq('student_id', studentId);
 
-    lastData = data || []
-    sortState = { key: 'date_at', dir: 'desc' }
-    renderLapTable(applySort(lastData))
-    updateSortIcons()
+  if (bulan && tahun) {
+    const start = `${tahun}-${bulan}-01`;
+    const end   = lastDayOfMonthYYYYMMDD(tahun, bulan);
+    q = q.gte('date_at', start).lte('date_at', end);
+  }
 
-    // set header laporan
-    const kelasOpt = lapKelas.options[lapKelas.selectedIndex]?.text || ''
-    const santriOpt = lapSantri.value ? (lapSantri.options[lapSantri.selectedIndex]?.text || '') : 'Semua'
-    const periodeLabel = (bulan && tahun) ? `${bulan}-${tahun}` : 'Semua Bulan'
+  const { data, error } = await q.order('date_at', { ascending: false });
+  if (error) return showAlert(error.message, false);
 
-    if (lapTitle && lapSubtitle) {
-      lapTitle.textContent = 'Laporan Pelanggaran Santri'
-      lapSubtitle.textContent = `Kelas: ${kelasOpt} | Santri: ${santriOpt} | Periode: ${periodeLabel}`
-    } else if (lapMeta) {
-      lapMeta.textContent = `Kelas: ${kelasOpt} | Santri: ${santriOpt} | Periode: ${periodeLabel}`
-    }
+  lastData = data || [];
+  sortState = { key: 'date_at', dir: 'desc' };
+  renderLapTable(applySort(lastData));
+  updateSortIcons();
 
-    showAlert(`Menampilkan ${lastData.length} data.`)
-  })
+  const kelasOpt  = lapKelas.options[lapKelas.selectedIndex]?.text || '';
+  const santriOpt = lapSantri.value ? (lapSantri.options[lapSantri.selectedIndex]?.text || '') : 'Semua';
+  const periode   = (bulan && tahun) ? `${bulan}-${tahun}` : 'Semua Bulan';
+  lapTitle.textContent    = 'Laporan Pelanggaran Santri';
+  lapSubtitle.textContent = `Kelas: ${kelasOpt} | Santri: ${santriOpt} | Periode: ${periode}`;
+
+  showAlert(`Menampilkan ${lastData.length} data.`);
+});
+
 }
 
 if (btnCetak) {
