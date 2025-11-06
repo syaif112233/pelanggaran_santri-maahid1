@@ -46,10 +46,49 @@
       </button>
     </section>
 
-    <!-- ================== PANEL: INPUT PER SANTRI (placeholder) ================== -->
-    <section id="panel-santri" class="hidden">
-      <p class="text-gray-500">(Opsi per santri bisa ditambahkan kemudian)</p>
-    </section>
+    <!-- ================== PANEL: INPUT PER SANTRI ================== -->
+<section id="panel-santri" class="hidden">
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <label class="block font-semibold mb-1">Pilih Kelas</label>
+      <select id="sanKelas" class="w-full border rounded px-3 py-2"></select>
+    </div>
+    <div>
+      <label class="block font-semibold mb-1">Pilih Santri</label>
+      <select id="sanSantri" class="w-full border rounded px-3 py-2">
+        <option value="">-- Pilih santri --</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-4">
+    <div>
+      <label class="block font-semibold mb-1">Pelanggaran</label>
+      <input id="sanPelanggaran" class="w-full border rounded px-3 py-2" />
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block font-semibold mb-1">Jam</label>
+        <input id="sanJam" type="time" class="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <label class="block font-semibold mb-1">Tanggal</label>
+        <input id="sanTanggal" type="date" class="w-full border rounded px-3 py-2" />
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <label class="block font-semibold mb-1">Keterangan</label>
+    <textarea id="sanKet" rows="3" class="w-full border rounded px-3 py-2"></textarea>
+  </div>
+
+  <button id="sanSimpan"
+    class="mt-5 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+    Simpan Pelanggaran
+  </button>
+</section>
+
 
     <!-- ================== PANEL: TAMPILKAN & CETAK ================== -->
     <section id="panel-laporan" class="hidden">
