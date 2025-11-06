@@ -33,36 +33,41 @@
   </div>
 
   <script type="module">
-    import { supabase } from './js/supabaseClient.js'
+  import { supabase } from './js/supabaseClient.js';
 
-    const statusEl = document.getElementById('status')
-    const tbody = document.getElementById('pelanggaranTableBody')
+  const statusEl = document.getElementById('status');
+  const tbody = document.getElementById('pelanggaranTableBody');
 
-    async function loadData() {
-      statusEl.textContent = '🔄 Mengambil data...'
-      const { data, error } = await supabase
-        .from('data_pelanggaran')
-        .select('No, NamaSantri, Kelas, Pelanggaran')
-        .limit(10)
+  async function loadData() {
+    statusEl.textContent = '🔄 Mengambil data...';
 
-      if (error) {
-        console.error(error)
-        statusEl.textContent = '❌ Gagal memuat data: ' + error.message
-        return
-      }
+    // BACA DARI VIEW: v_violations_expanded
+    const { data, error } = await supabase
+      .from('v_violations_expanded')
+      .select('id, student_name, class_name, violation, date_at, time_at, notes')
+      .order('id', { ascending: false })
+      .limit(50);
 
-      statusEl.textContent = '✅ Terhubung ke Supabase. Menampilkan 10 data terbaru.'
-      tbody.innerHTML = data.map((row, i) => `
-        <tr class="border-b">
-          <td class="px-4 py-2">${row.No ?? i + 1}</td>
-          <td class="px-4 py-2">${row.NamaSantri}</td>
-          <td class="px-4 py-2">${row.Kelas}</td>
-          <td class="px-4 py-2">${row.Pelanggaran}</td>
-        </tr>
-      `).join('')
+    if (error) {
+      console.error(error);
+      statusEl.textContent = '❌ Gagal memuat data: ' + error.message;
+      return;
     }
 
-    loadData()
-  </script>
+    statusEl.textContent = `✅ Terhubung. Menampilkan ${data.length} data terbaru.`;
+
+    tbody.innerHTML = data.map((row, i) => `
+      <tr class="border-b">
+        <td class="px-4 py-2">${row.id ?? (i+1)}</td>
+        <td class="px-4 py-2">${row.student_name}</td>
+        <td class="px-4 py-2">${row.class_name}</td>
+        <td class="px-4 py-2">${row.violation}</td>
+      </tr>
+    `).join('');
+  }
+
+  loadData();
+</script>
+
 </body>
 </html>
