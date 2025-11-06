@@ -284,41 +284,41 @@ async function ensureHtml2Pdf() {
 /* ===== handler PDF + WA (FIX RangeError) ===== */
 btnPdfWa.addEventListener('click', async () => {
   try {
-    await ensureHtml2Pdf()
-  } catch (e) {
-    showAlert(e.message || 'html2pdf belum dimuat', false)
-    return
-  }
-  if (!lastData.length) {
-    showAlert('Tampilkan data dulu sebelum membuat PDF.', false)
-    return
-  }
+    if (!lastData.length) {
+      showAlert('Tampilkan data dulu sebelum membuat PDF.', false)
+      return
+    }
 
-  const opt = {
-    margin: 10,
-    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }
+    // 1) Render elemen laporan ke canvas pakai html2canvas (v1.4.1)
+    const canvas = await window.html2canvas(lapWrap, {
+      scale: 2,            // kualitas tinggi
+      useCORS: true,       // kalau ada gambar ber-domain lain
+      backgroundColor: '#ffffff'
+    })
 
-    // cara aman: ambil arraybuffer lalu buat Blob sendiri (hindari RangeError)
-  const worker = html2pdf().set(opt).from(lapWrap).toPdf()
-  const pdf = await worker.get('pdf')                     // ambil jsPDF instance
-  const arrayBuffer = pdf.output('arraybuffer')           // hasilkan ArrayBuffer
-  const blob = new Blob([arrayBuffer], { type: 'application/pdf' }) // buat Blob manual
+    // 2) Convert canvas ke image (JPEG) lalu masukkan ke jsPDF
+    const imgData = canvas.toDataURL('image/jpeg', 0.98)
+    const { jsPDF } = window.jspdf
+    const pdf = new jsPDF('landscape', 'mm', 'a4')
 
-  // ubah ke base64 untuk upload
-  const buf = await blob.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const imgW = pageW
+    const imgH = (canvas.height * imgW) / canvas.width
 
+    // kalau tinggi gambar > tinggi halaman, tetap dipaksa muat satu halaman
+    const drawH = Math.min(imgH, pageH)
+    pdf.addImage(imgData, 'JPEG', 0, 0, imgW, drawH)
 
-  // upload ke route serverless kamu: /api/upload-report
-  try {
+    // 3) Hasilkan ArrayBuffer → base64 → upload
+    const arrayBuffer = pdf.output('arraybuffer')
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+
+    const filename = `laporan-pelanggaran-${Date.now()}.pdf`
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: opt.filename, base64 })
+      body: JSON.stringify({ filename, base64 })
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json?.error || 'Upload gagal')
@@ -332,7 +332,8 @@ btnPdfWa.addEventListener('click', async () => {
     )
     window.open(`https://wa.me/?text=${text}`, '_blank')
   } catch (e) {
-    showAlert(e.message || 'Gagal upload PDF', false)
+    showAlert(e?.message || 'Gagal membuat/mengunggah PDF', false)
+    console.error(e)
   }
 })
 
