@@ -233,6 +233,18 @@ if (lapKelas) {
 let lastData = []
 let sortState = { key: 'date_at', dir: 'desc' }
 
+async function ensureHtml2Pdf() {
+  if (window.html2pdf) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.referrerPolicy = 'no-referrer';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Gagal memuat html2pdf'));
+    document.head.appendChild(s);
+  });
+}
+
 function applySort(data) {
   const { key, dir } = sortState
   const mul = dir === 'asc' ? 1 : -1
@@ -343,52 +355,48 @@ if (btnCetak) {
 
 if (btnPdfWa) {
   btnPdfWa.addEventListener('click', async () => {
-    if (!lastData.length) return showAlert('Tampilkan data dulu.', false)
+  try {
+    await ensureHtml2Pdf(); // pastikan lib siap
+  } catch (e) {
+    showAlert(e.message || 'html2pdf belum dimuat', false);
+    return;
+  }
 
-    if (typeof html2pdf === 'undefined') {
-      return showAlert('html2pdf belum dimuat. Tambahkan script html2pdf di <head>.', false)
-    }
+  if (!lastData.length) return showAlert('Tampilkan data dulu.', false);
 
-    const filename = `laporan-pelanggaran-${Date.now()}.pdf`
-    const opt = {
-      margin: 10,
-      filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    }
+  const opt = {
+    margin: 10,
+    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  };
 
-    // render html -> pdf (blob)
-    const blob = await html2pdf().from(lapWrap).set(opt).outputPdf('blob')
-    const buf = await blob.arrayBuffer()
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+  // elemen yang dicetak: #lap-wrap
+  const blob = await html2pdf().from(lapWrap).set(opt).outputPdf('blob');
 
-    // upload ke Supabase Storage via route serverless
-    const res = await fetch('/api/upload-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, base64 })
-    })
-    const json = await res.json()
-    if (!res.ok) return showAlert(json.error || 'Gagal upload PDF', false)
+  // konversi ke base64 buat upload
+  const buf = await blob.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
 
-    const url = json.publicUrl
-    showAlert('PDF jadi: ' + url)
+  // upload ke API serverless (Vercel) -> Supabase Storage
+  const res = await fetch('/api/upload-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: opt.filename, base64 })
+  });
+  const json = await res.json();
+  if (!res.ok) return showAlert(json.error || 'Gagal upload PDF', false);
 
-    // siapkan teks WA
-    let periode = ''
-    const bulan = lapBulan.value
-    const tahun = lapTahun.value
-    if (bulan && tahun) periode = `${bulan}-${tahun}`; else periode = 'Semua Bulan'
+  const url = json.publicUrl;
+  showAlert('PDF jadi: ' + url);
 
-    const kelasOpt = lapKelas?.options[lapKelas.selectedIndex]?.text || ''
-    const santriOpt = lapSantri?.value ? (lapSantri.options[lapSantri.selectedIndex]?.text || '') : 'Semua'
-    const caption = `Laporan Pelanggaran Santri | Kelas: ${kelasOpt} | Santri: ${santriOpt} | Periode: ${periode}\nPDF: ${url}`
-
-    const text = encodeURIComponent(`Assalamu'alaikum. ${caption}`)
-    // buka WA (manual kirim)
-    window.open(`https://wa.me/?text=${text}`, '_blank')
-  })
+  // buka WhatsApp (share manual)
+  const text = encodeURIComponent(
+    `Assalamu'alaikum. Berikut laporan pelanggaran santri — ${lapSubtitle.textContent}. PDF: ${url}`
+  );
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+});
 }
 
 /* ================= init ================= */
