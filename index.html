@@ -4,30 +4,26 @@
   <meta charset="UTF-8" />
   <title>Sistem Pelanggaran Santri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind (CDN) -->
+
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- html2pdf (wajib untuk tombol "Buat PDF & Kirim WA") -->
-  <!-- Opsi 1: cdnjs -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" referrerpolicy="no-referrer"></script>
 
-<!-- atau, Opsi 2: unpkg -->
-<!-- <script src="https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script> -->
+  <!-- html2pdf (untuk export PDF) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
-  <!-- di <head> -->
-<style>
-  /* Print A4 landscape */
-  @media print {
-    @page { size: A4 landscape; margin: 10mm; }
-    body * { visibility: hidden !important; }
-    #lap-wrap, #lap-wrap * { visibility: visible !important; }
-    #lap-wrap { position: absolute; inset: 0; padding: 0; }
-    #lap-table thead { display: table-header-group; }
-    #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
-  }
-  th[data-sort] { cursor:pointer; user-select:none; }
-  .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
-</style>
-
+  <style>
+    /* Print A4 landscape */
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body * { visibility: hidden !important; }
+      #lap-wrap, #lap-wrap * { visibility: visible !important; }
+      #lap-wrap { position: absolute; inset: 0; padding: 0; }
+      #lap-table thead { display: table-header-group; }
+      #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
+    }
+    th[data-sort] { cursor: pointer; user-select: none; }
+    .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
+  </style>
 </head>
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-6">
@@ -113,78 +109,80 @@
 
 
     <!-- ================== PANEL: TAMPILKAN & CETAK ================== -->
-<section id="panel-laporan" class="hidden">
-  <div class="grid md:grid-cols-4 gap-3 mb-4">
-    <div>
-      <label class="block font-semibold mb-1">Kelas</label>
-      <select id="lapKelas" class="w-full border rounded px-3 py-2"></select>
-    </div>
-    <div>
-      <label class="block font-semibold mb-1">Santri (opsional)</label>
-      <select id="lapSantri" class="w-full border rounded px-3 py-2">
-        <option value="">Semua Santri</option>
-      </select>
-    </div>
-    <div>
-      <label class="block font-semibold mb-1">Bulan</label>
-      <select id="lapBulan" class="w-full border rounded px-3 py-2">
-        <option value="">Semua</option>
-        <option value="01">Januari</option><option value="02">Februari</option>
-        <option value="03">Maret</option><option value="04">April</option>
-        <option value="05">Mei</option><option value="06">Juni</option>
-        <option value="07">Juli</option><option value="08">Agustus</option>
-        <option value="09">September</option><option value="10">Oktober</option>
-        <option value="11">November</option><option value="12">Desember</option>
-      </select>
-    </div>
-    <div>
-      <label class="block font-semibold mb-1">Tahun</label>
-      <input id="lapTahun" type="number" class="w-full border rounded px-3 py-2" placeholder="2025" />
-    </div>
-  </div>
-
-  <div class="flex gap-2">
-    <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
-    <button id="btnCetak" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Cetak</button>
-    <button id="btnPdfWa" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Buat PDF & Kirim WA</button>
-  </div>
-
-  <!-- 🟢 Tambahkan pembungkus laporan di sini -->
-  <div id="lap-wrap" class="mt-6 bg-white p-6 rounded shadow-sm">
-    <h2 id="lap-title" class="text-xl font-semibold text-center mb-1">Laporan Pelanggaran Santri</h2>
-    <p id="lap-subtitle" class="text-center text-gray-600 mb-4">Kelas: - | Santri: - | Periode: -</p>
-
-    <div class="overflow-x-auto">
-      <table id="lap-table" class="w-full border">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="p-2 border" data-sort="no">No <span class="sort-ico" id="ico-no"></span></th>
-            <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico" id="ico-student_name"></span></th>
-            <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico" id="ico-kelas"></span></th>
-            <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico" id="ico-violation"></span></th>
-            <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico" id="ico-date_at"></span></th>
-            <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico" id="ico-time_at"></span></th>
-            <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico" id="ico-notes"></span></th>
-          </tr>
-        </thead>
-        <tbody id="tbodyLaporan"></tbody>
-      </table>
-    </div>
-
-    <div class="mt-10 grid grid-cols-2 text-center text-sm">
-      <div>
-        Mengetahui,<br><br><br>
-        _______________________<br>
-        Wali Kelas / Musyrif
+    <section id="panel-laporan" class="hidden">
+      <div class="grid md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label class="block font-semibold mb-1">Kelas</label>
+          <select id="lapKelas" class="w-full border rounded px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Santri (opsional)</label>
+          <select id="lapSantri" class="w-full border rounded px-3 py-2">
+            <option value="">Semua Santri</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Bulan</label>
+          <select id="lapBulan" class="w-full border rounded px-3 py-2">
+            <option value="">Semua</option>
+            <option value="01">Januari</option><option value="02">Februari</option>
+            <option value="03">Maret</option><option value="04">April</option>
+            <option value="05">Mei</option><option value="06">Juni</option>
+            <option value="07">Juli</option><option value="08">Agustus</option>
+            <option value="09">September</option><option value="10">Oktober</option>
+            <option value="11">November</option><option value="12">Desember</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Tahun</label>
+          <input id="lapTahun" type="number" class="w-full border rounded px-3 py-2" placeholder="2025" />
+        </div>
       </div>
-      <div>
-        Kudus,<br><br><br>
-        _______________________<br>
-        Bag. Kamtib / Pembina
+
+      <div class="flex gap-3">
+        <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
+        <button id="btnCetak" class="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700">Cetak</button>
+        <button id="btnPdfWa" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Buat PDF & Kirim WA</button>
       </div>
-    </div>
-  </div>
-</section>
+
+      <!-- Bungkus yang akan dijadikan PDF -->
+      <div id="lap-wrap" class="mt-4 bg-white border rounded">
+        <div class="p-4 pb-0">
+          <h2 class="text-xl font-semibold text-center">Laporan Pelanggaran Santri</h2>
+          <p id="lap-subtitle" class="text-center text-sm text-gray-500 mt-1">-</p>
+        </div>
+
+        <div class="overflow-x-auto p-4">
+          <table id="lap-table" class="w-full bg-white border">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-2 border">No</th>
+                <th class="p-2 border" data-sort="student_name">Nama Santri <span id="ico-student_name" class="sort-ico"></span></th>
+                <th class="p-2 border" data-sort="kelas">Kelas <span id="ico-kelas" class="sort-ico"></span></th>
+                <th class="p-2 border" data-sort="violation">Pelanggaran <span id="ico-violation" class="sort-ico"></span></th>
+                <th class="p-2 border" data-sort="date_at">Tanggal <span id="ico-date_at" class="sort-ico"></span></th>
+                <th class="p-2 border" data-sort="time_at">Jam <span id="ico-time_at" class="sort-ico"></span></th>
+                <th class="p-2 border" data-sort="notes">Keterangan <span id="ico-notes" class="sort-ico"></span></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyLaporan"></tbody>
+          </table>
+        </div>
+
+        <div class="px-4 pb-6 pt-2 text-sm text-gray-700 grid grid-cols-2">
+          <div class="text-center">
+            Mengetahui,<br><br><br>
+            _______________________<br>
+            Wali Kelas / Musyrif
+          </div>
+          <div class="text-center">
+            Kudus,<br><br><br>
+            _______________________<br>
+            Bag. Kamtib / Pembina
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
   
 
