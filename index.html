@@ -182,8 +182,8 @@
  * SUPABASE_URL, SUPABASE_ANON_KEY  (public)
  * (server side: SUPABASE_SERVICE_KEY digunakan di /api/upload-report)
  */
-const supabaseUrl = window.__SUPABASE_URL__ || "<PASTE_SUPABASE_URL>";
-const supabaseAnon = window.__SUPABASE_ANON__ || "<PASTE_SUPABASE_ANON_KEY>";
+const supabaseUrl = window.__SUPABASE_URL__ || "https://qjcnqeyrzryuclwpmala.supabase.co";
+const supabaseAnon = window.__SUPABASE_ANON__ || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqY25xZXlyenJ5dWNsd3BtYWxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0MDIwNjgsImV4cCI6MjA3Nzk3ODA2OH0.WwYGa4gKjoJ8n4fuqpQifgpLPJxHlZuUbtdhiF0OGs8";
 const supa = supabase.createClient(supabaseUrl, supabaseAnon);
 
 // helpers UI
