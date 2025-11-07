@@ -281,7 +281,7 @@ async function ensureHtml2Pdf() {
   })
 }
 
-// ====== Buat PDF dari data (tanpa html2canvas) + Kirim WA ======
+// ===== Buat PDF dari data langsung (tanpa html2canvas) =====
 btnPdfWa.addEventListener('click', async () => {
   try {
     if (!lastData.length) {
@@ -289,10 +289,9 @@ btnPdfWa.addEventListener('click', async () => {
       return
     }
 
-    // Ambil ringkasan untuk judul PDF
-    const ringkasan = lapSubtitle?.textContent?.trim() || ''
+    // Ambil ringkasan
+    const ringkasan = lapSubtitle?.textContent?.trim() || '-'
 
-    // Siapkan jsPDF (landscape A4)
     const { jsPDF } = window.jspdf
     const doc = new jsPDF('landscape', 'mm', 'a4')
 
@@ -300,9 +299,9 @@ btnPdfWa.addEventListener('click', async () => {
     doc.setFontSize(14)
     doc.text('Laporan Pelanggaran Santri', 14, 14)
     doc.setFontSize(10)
-    doc.text(ringkasan || '-', 14, 20)
+    doc.text(ringkasan, 14, 20)
 
-    // Siapkan data tabel dari lastData
+    // Buat tabel dari data
     const head = [['No', 'Nama Santri', 'Kelas', 'Pelanggaran', 'Tanggal', 'Jam', 'Keterangan']]
     const body = lastData.map((r, i) => [
       String(i + 1),
@@ -314,43 +313,53 @@ btnPdfWa.addEventListener('click', async () => {
       r.notes || ''
     ])
 
-    // Render tabel
     doc.autoTable({
       head,
       body,
       startY: 26,
       margin: { left: 14, right: 14 },
       styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [27, 86, 226] }, // biru
+      headStyles: { fillColor: [27, 86, 226] },
       theme: 'grid'
     })
 
-    // Ambil buffer PDF & ubah ke base64
+    // Konversi ke base64
     const arrayBuf = doc.output('arraybuffer')
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)))
     const filename = `laporan-pelanggaran-${Date.now()}.pdf`
 
-    // Upload ke route serverless kamu
+    // Upload ke serverless function
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename, base64 })
     })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json?.error || 'Upload gagal')
 
-    // Buka WhatsApp dengan link PDF
+    let json
+    try {
+      json = await res.json()
+    } catch {
+      showAlert('Upload gagal (balasan bukan JSON).', false)
+      return
+    }
+
+    if (!res.ok) {
+      showAlert(json?.error || 'Upload gagal', false)
+      return
+    }
+
     const url = json.publicUrl
     const text = encodeURIComponent(
       `Assalamu'alaikum. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
     )
     window.open(`https://wa.me/?text=${text}`, '_blank')
-    showAlert('PDF berhasil dibuat dan link WhatsApp dibuka.', true)
+    showAlert('PDF berhasil dibuat & link WhatsApp dibuka.', true)
   } catch (e) {
     console.error(e)
     showAlert(e.message || 'Gagal membuat/mengunggah PDF', false)
   }
 })
+
 
 
 
