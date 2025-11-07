@@ -1,36 +1,35 @@
-// pages/api/upload-report.js
-export const config = {
-  api: { bodyParser: { sizeLimit: '25mb' } } // naikin limit body base64
-}
+// api/upload-report.js
+const { createClient } = require('@supabase/supabase-js')
 
-import { createClient } from '@supabase/supabase-js'
-
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' })
+      res.status(405).json({ error: 'Method not allowed' })
+      return
     }
 
     const { filename, base64 } = req.body || {}
     if (!filename || !base64) {
-      return res.status(400).json({ error: 'filename & base64 required' })
+      res.status(400).json({ error: 'filename & base64 required' })
+      return
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL
-    const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
     if (!SUPABASE_URL || !SERVICE_KEY) {
-      return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_KEY' })
+      res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_KEY' })
+      return
     }
 
     const supa = createClient(SUPABASE_URL, SERVICE_KEY)
     const bucket = 'reports'
 
-    // pastikan bucket 'reports' ada
+    // pastikan bucket ada
     const { data: buckets, error: lbErr } = await supa.storage.listBuckets()
-    if (lbErr) return res.status(500).json({ error: lbErr.message })
-    if (!buckets?.find(b => b.name === bucket)) {
+    if (lbErr) { res.status(500).json({ error: lbErr.message }); return }
+    if (!buckets?.some(b => b.name === bucket)) {
       const { error: cbErr } = await supa.storage.createBucket(bucket, { public: true })
-      if (cbErr) return res.status(500).json({ error: cbErr.message })
+      if (cbErr) { res.status(500).json({ error: cbErr.message }); return }
     }
 
     const buffer = Buffer.from(base64, 'base64')
@@ -38,13 +37,13 @@ export default async function handler(req, res) {
 
     const { error: upErr } = await supa.storage.from(bucket).upload(path, buffer, {
       contentType: 'application/pdf',
-      upsert: true,
+      upsert: true
     })
-    if (upErr) return res.status(500).json({ error: upErr.message })
+    if (upErr) { res.status(500).json({ error: upErr.message }); return }
 
     const { data } = supa.storage.from(bucket).getPublicUrl(path)
-    return res.status(200).json({ publicUrl: data.publicUrl })
+    res.status(200).json({ publicUrl: data.publicUrl })
   } catch (e) {
-    return res.status(500).json({ error: e?.message || 'Upload error' })
+    res.status(500).json({ error: e?.message || 'Upload error' })
   }
 }
