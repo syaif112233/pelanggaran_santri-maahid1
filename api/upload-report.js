@@ -1,0 +1,50 @@
+import { createClient } from '@supabase/supabase-js';
+
+export const config = {
+  api: {
+    bodyParser: { sizeLimit: '25mb' },
+  },
+};
+
+export default async function handler(req, res) {
+  try {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { filename, base64 } = req.body || {};
+    if (!filename || !base64) {
+      return res.status(400).json({ error: 'filename & base64 required' });
+    }
+
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+    if (!SUPABASE_URL || !SERVICE_KEY) {
+      return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_KEY' });
+    }
+
+    const supa = createClient(SUPABASE_URL, SERVICE_KEY);
+    const bucket = 'reports';
+
+    // pastikan bucket ada
+    const { data: buckets } = await supa.storage.listBuckets();
+    if (!buckets?.find(b => b.name === bucket)) {
+      await supa.storage.createBucket(bucket, { public: true });
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    const path = `${new Date().getFullYear()}/${filename}`;
+
+    const { error: uploadErr } = await supa.storage.from(bucket).upload(path, buffer, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
+    if (uploadErr) return res.status(500).json({ error: uploadErr.message });
+
+    const { data } = supa.storage.from(bucket).getPublicUrl(path);
+    return res.status(200).json({ publicUrl: data.publicUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Upload error' });
+  }
+}
