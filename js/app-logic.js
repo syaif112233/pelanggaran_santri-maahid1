@@ -281,7 +281,7 @@ async function ensureHtml2Pdf() {
   })
 }
 
-/* ===== handler PDF + WA (FIX RangeError) ===== */
+// ====== Buat PDF dari data (tanpa html2canvas) + Kirim WA ======
 btnPdfWa.addEventListener('click', async () => {
   try {
     if (!lastData.length) {
@@ -289,32 +289,48 @@ btnPdfWa.addEventListener('click', async () => {
       return
     }
 
-    // Render elemen ke canvas
-    const canvas = await html2canvas(lapWrap, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff'
+    // Ambil ringkasan untuk judul PDF
+    const ringkasan = lapSubtitle?.textContent?.trim() || ''
+
+    // Siapkan jsPDF (landscape A4)
+    const { jsPDF } = window.jspdf
+    const doc = new jsPDF('landscape', 'mm', 'a4')
+
+    // Judul
+    doc.setFontSize(14)
+    doc.text('Laporan Pelanggaran Santri', 14, 14)
+    doc.setFontSize(10)
+    doc.text(ringkasan || '-', 14, 20)
+
+    // Siapkan data tabel dari lastData
+    const head = [['No', 'Nama Santri', 'Kelas', 'Pelanggaran', 'Tanggal', 'Jam', 'Keterangan']]
+    const body = lastData.map((r, i) => [
+      String(i + 1),
+      r.student_name || '',
+      r.kelas || '',
+      r.violation || '',
+      r.date_at || '',
+      r.time_at || '',
+      r.notes || ''
+    ])
+
+    // Render tabel
+    doc.autoTable({
+      head,
+      body,
+      startY: 26,
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [27, 86, 226] }, // biru
+      theme: 'grid'
     })
 
-    // Konversi canvas ke gambar JPEG
-    const imgData = canvas.toDataURL('image/jpeg', 0.98)
-    const { jsPDF } = window.jspdf
-    const pdf = new jsPDF('landscape', 'mm', 'a4')
-
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const imgWidth = pageWidth
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
-
-    // Gambar ke halaman PDF
-    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight)
-
-    // Ambil array buffer lalu ubah ke base64
-    const arrayBuffer = pdf.output('arraybuffer')
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+    // Ambil buffer PDF & ubah ke base64
+    const arrayBuf = doc.output('arraybuffer')
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)))
     const filename = `laporan-pelanggaran-${Date.now()}.pdf`
 
-    // Upload ke serverless route kamu
+    // Upload ke route serverless kamu
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -323,19 +339,19 @@ btnPdfWa.addEventListener('click', async () => {
     const json = await res.json()
     if (!res.ok) throw new Error(json?.error || 'Upload gagal')
 
-    // Sukses: tampilkan link WA
+    // Buka WhatsApp dengan link PDF
     const url = json.publicUrl
-    const ringkasan = lapSubtitle?.textContent?.trim() || ''
     const text = encodeURIComponent(
       `Assalamu'alaikum. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
     )
     window.open(`https://wa.me/?text=${text}`, '_blank')
-    showAlert('PDF berhasil dibuat dan siap dikirim.', true)
+    showAlert('PDF berhasil dibuat dan link WhatsApp dibuka.', true)
   } catch (e) {
-    showAlert(e.message || 'Gagal membuat PDF', false)
     console.error(e)
+    showAlert(e.message || 'Gagal membuat/mengunggah PDF', false)
   }
 })
+
 
 
 /* ================= init ================= */
