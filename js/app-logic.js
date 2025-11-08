@@ -1,4 +1,4 @@
-// ====== Supabase client (sudah kamu buat terpisah) ======
+// js/app-logic.js
 import { supabase } from './supabaseClient.js'
 
 /* ================= alert helper ================= */
@@ -39,7 +39,8 @@ const btnSimpan = document.getElementById('btnSimpanKelas')
 
 const sanKelas = document.getElementById('sanKelas')
 const sanSantri = document.getElementById('sanSantri')
-const sanPelanggaran = document.getElementById('sanPelanggaran')
+const sanPelanggaranSel = document.getElementById('sanPelanggaranSel')
+const sanPelanggaranOther = document.getElementById('sanPelanggaranOther')
 const sanJam = document.getElementById('sanJam')
 const sanTanggal = document.getElementById('sanTanggal')
 const sanKet = document.getElementById('sanKet')
@@ -51,23 +52,57 @@ const lapBulan = document.getElementById('lapBulan')
 const lapTahun = document.getElementById('lapTahun')
 const btnTampil = document.getElementById('btnTampilkan')
 const btnCetak = document.getElementById('btnCetak')
-const btnPdfWa = document.getElementById('btnPdfWa') || document.getElementById('btnKirimWa')
-
+const btnKirimWa = document.getElementById('btnKirimWa')
 const tbodyLap = document.getElementById('tbodyLaporan')
-const lapTitle = document.getElementById('lap-title') // optional
+const lapTitle = document.getElementById('lap-title')
 const lapSubtitle = document.getElementById('lap-subtitle')
 const lapWrap = document.getElementById('lap-wrap')
 const lapTable = document.getElementById('lap-table')
 
+/* ================= preset pelanggaran ================= */
+const VIOLATION_OPTIONS = [
+  'Terlambat',
+  'Atribut tidak lengkap',
+  'Tidak mengikuti pelajaran',
+  'Terlambat mengikuti pelajaran',
+  'Lainnya'
+]
+function fillViolationSelect(el) {
+  el.innerHTML = VIOLATION_OPTIONS.map(v => `<option value="${v}">${v}</option>`).join('')
+}
+
+/* ================= kelas map & helpers WA ================= */
+let CLASS_MAP = new Map() // id -> { id, kelas, wali_name, wali_phone }
+
+function toWa62(num) {
+  if (!num) return null
+  let n = ('' + num).replace(/\D/g, '')
+  if (n.startsWith('0')) n = '62' + n.slice(1)
+  if (!n.startsWith('62')) n = '62' + n.replace(/^62+/, '')
+  return n
+}
+
 /* ================= loaders ================= */
 async function loadClasses() {
-  const { data, error } = await supabase.from('classes').select('id, kelas').order('kelas')
+  const { data, error } = await supabase
+    .from('classes')
+    .select('id, kelas, wali_name, wali_phone')
+    .order('kelas')
+
   if (error) { showAlert(error.message, false); return [] }
-  // Kelas untuk panel Kelas & laporan
+
+  CLASS_MAP = new Map(data.map(c => [c.id, c]))
+
+  // Input per Kelas
   selectKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
-  lapKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
-  // Kelas untuk panel Santri
+
+  // Laporan: “Semua Kelas” paling atas
+  lapKelas.innerHTML = `<option value="">Semua Kelas</option>` +
+    data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
+
+  // Input per Santri
   sanKelas.innerHTML = data.map(c => `<option value="${c.id}">${c.kelas}</option>`).join('')
+
   return data
 }
 
@@ -87,7 +122,14 @@ function renderKelasRows(students) {
   tbodyKelas.innerHTML = students.map(s => `
     <tr data-student-id="${s.id}">
       <td class="p-2 border">${s.name}</td>
-      <td class="p-2 border"><input class="w-full border rounded px-2 py-1" name="violation"></td>
+
+      <td class="p-2 border">
+        <select class="w-full border rounded px-2 py-1" name="violation_sel">
+          ${VIOLATION_OPTIONS.map(v => `<option value="${v}">${v}</option>`).join('')}
+        </select>
+        <input class="w-full border rounded px-2 py-1 mt-1 hidden" name="violation_other" placeholder="Isi pelanggaran..." />
+      </td>
+
       <td class="p-2 border"><input class="w-full border rounded px-2 py-1" type="time" name="time"></td>
       <td class="p-2 border"><input class="w-full border rounded px-2 py-1" type="date" name="date" value="${today}"></td>
       <td class="p-2 border"><input class="w-full border rounded px-2 py-1" name="notes"></td>
@@ -95,12 +137,31 @@ function renderKelasRows(students) {
   `).join('')
 }
 
+/* toggle “lainnya” di input per kelas */
+tbodyKelas.addEventListener('change', (e) => {
+  const sel = e.target.closest('select[name="violation_sel"]')
+  if (!sel) return
+  const tr = sel.closest('tr')
+  const other = tr.querySelector('input[name="violation_other"]')
+  if (sel.value === 'Lainnya') {
+    other.classList.remove('hidden'); other.focus()
+  } else {
+    other.classList.add('hidden'); other.value = ''
+  }
+})
+
 function collectRows() {
   const rows = []
   tbodyKelas.querySelectorAll('tr').forEach(tr => {
+    const sel = tr.querySelector('select[name="violation_sel"]')
+    const other = tr.querySelector('input[name="violation_other"]')
+    const violationVal = sel.value === 'Lainnya'
+      ? (other.value || '').trim()
+      : sel.value
+
     rows.push({
       student_id: tr.getAttribute('data-student-id'),
-      violation: tr.querySelector('input[name="violation"]').value.trim(),
+      violation: violationVal,
       time: tr.querySelector('input[name="time"]').value || null,
       date: tr.querySelector('input[name="date"]').value || null,
       notes: tr.querySelector('input[name="notes"]').value.trim() || null,
@@ -136,7 +197,11 @@ btnSimpan.addEventListener('click', async () => {
   const { error } = await supabase.from('violations').insert(payload)
   if (error) return showAlert(error.message, false)
   showAlert(`Berhasil simpan ${payload.length} data.`)
-  tbodyKelas.querySelectorAll('input[name="violation"], input[name="notes"]').forEach(i => i.value = '')
+
+  // bersihkan pelanggaran/notes/jam
+  tbodyKelas.querySelectorAll('input[name="violation_other"]').forEach(i => { i.value=''; i.classList.add('hidden') })
+  tbodyKelas.querySelectorAll('select[name="violation_sel"]').forEach(sel => { sel.value = VIOLATION_OPTIONS[0] })
+  tbodyKelas.querySelectorAll('input[name="notes"]').forEach(i => i.value = '')
   tbodyKelas.querySelectorAll('input[name="time"]').forEach(i => i.value = '')
 })
 
@@ -144,109 +209,105 @@ btnSimpan.addEventListener('click', async () => {
 sanKelas.addEventListener('change', async () => {
   const classId = sanKelas.value
   const students = await loadStudentsByClass(classId)
-  sanSantri.innerHTML = `<option value="">-- Pilih santri --</option>` + students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+  sanSantri.innerHTML = `<option value="">-- Pilih santri --</option>` +
+    students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+})
+
+sanPelanggaranSel.addEventListener('change', () => {
+  if (sanPelanggaranSel.value === 'Lainnya') {
+    sanPelanggaranOther.classList.remove('hidden'); sanPelanggaranOther.focus()
+  } else {
+    sanPelanggaranOther.classList.add('hidden'); sanPelanggaranOther.value = ''
+  }
 })
 
 sanSimpan.addEventListener('click', async () => {
-  const classId = sanKelas.value
+  const classId   = sanKelas.value
   const studentId = sanSantri.value
-  const violation = sanPelanggaran.value.trim()
-  const time_at = sanJam.value || null
-  const date_at = sanTanggal.value || null
-  const notes = sanKet.value.trim() || null
+  const violation = (sanPelanggaranSel.value === 'Lainnya'
+                      ? sanPelanggaranOther.value
+                      : sanPelanggaranSel.value).trim()
+  const time_at   = sanJam.value || null
+  const date_at   = sanTanggal.value || null
+  const notes     = sanKet.value.trim() || null
 
-  if (!classId) return showAlert('Pilih kelas dulu.', false)
+  if (!classId)   return showAlert('Pilih kelas dulu.', false)
   if (!studentId) return showAlert('Pilih santri dulu.', false)
   if (!violation) return showAlert('Isi pelanggaran.', false)
 
-  const { error } = await supabase.from('violations').insert([{ student_id: studentId, class_id: classId, violation, time_at, date_at, notes }])
+  const { error } = await supabase.from('violations').insert([
+    { student_id: studentId, class_id: classId, violation, time_at, date_at, notes }
+  ])
   if (error) return showAlert(error.message, false)
-  showAlert('Berhasil simpan 1 data.')
-  sanPelanggaran.value = ''
-  sanJam.value = ''
-  sanKet.value = ''
-})
 
-/* ================= utilities: months, years ================= */
-const MONTHS = ['01','02','03','04','05','06','07','08','09','10','11','12']
-function fillMonthYearDropdowns() {
-  // lapBulan sudah punya opsi “Semua” di HTML; biarkan
-  const year = new Date().getFullYear()
-  lapTahun.value = year
-}
+  showAlert('Berhasil simpan 1 data.')
+  sanPelanggaranSel.value = VIOLATION_OPTIONS[0]
+  sanPelanggaranOther.classList.add('hidden'); sanPelanggaranOther.value = ''
+  sanJam.value = ''; sanKet.value = ''
+})
 
 /* ================= events: Laporan ================= */
 lapKelas.addEventListener('change', async () => {
   const classId = lapKelas.value
+  if (!classId) { // semua kelas
+    lapSantri.innerHTML = `<option value="">Semua Santri</option>`
+    return
+  }
   const students = await loadStudentsByClass(classId)
-  lapSantri.innerHTML = `<option value="">Semua Santri</option>` + students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+  lapSantri.innerHTML = `<option value="">Semua Santri</option>` +
+    students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
 })
 
 let lastData = []
-let sortState = { key: 'date_at', dir: 'desc' }
-
-function applySort(data) {
-  const { key, dir } = sortState
-  const mul = dir === 'asc' ? 1 : -1
-  return data.slice().sort((a, b) => {
-    const va = (a[key] ?? '').toString()
-    const vb = (b[key] ?? '').toString()
-    if (va < vb) return -1 * mul
-    if (va > vb) return  1 * mul
-    return 0
-  })
-}
 
 function renderLapTable(rows) {
   const html = rows.map((r, i) => `
-    <tr>
+    <tr data-vid="${r.id || ''}">
       <td class="p-2 border">${i + 1}</td>
       <td class="p-2 border">${r.student_name || ''}</td>
-      <td class="p-2 border">${r.kelas || ''}</td>
+      <td class="p-2 border">${r.kelas || r.class_name || r.class || ''}</td>
       <td class="p-2 border">${r.violation || ''}</td>
       <td class="p-2 border">${r.date_at || ''}</td>
       <td class="p-2 border">${r.time_at || ''}</td>
       <td class="p-2 border">${r.notes || ''}</td>
+      <td class="p-2 border text-center">
+        <button class="btn-del px-2 py-1 text-white bg-rose-600 rounded">Hapus</button>
+      </td>
     </tr>
   `).join('')
   tbodyLap.innerHTML = html
 }
 
-function updateSortIcons() {
-  lapTable.querySelectorAll('th[data-sort] .sort-ico').forEach(el => el.textContent = '')
-  const ico = document.getElementById('ico-' + sortState.key)
-  if (ico) ico.textContent = sortState.dir === 'asc' ? '▲' : '▼'
-}
+/* hapus data pelanggaran di tabel laporan */
+tbodyLap.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-del')
+  if (!btn) return
+  const tr = btn.closest('tr')
+  const id = tr?.getAttribute('data-vid')
+  if (!id) return showAlert('ID pelanggaran tidak ditemukan.', false)
 
-lapTable.addEventListener('click', (e) => {
-  const th = e.target.closest('th[data-sort]')
-  if (!th) return
-  const key = th.getAttribute('data-sort')
-  if (sortState.key === key) {
-    sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortState.key = key
-    sortState.dir = 'asc'
-  }
-  const sorted = applySort(lastData)
-  renderLapTable(sorted)
-  updateSortIcons()
+  if (!confirm('Hapus data pelanggaran ini?')) return
+  const { error } = await supabase.from('violations').delete().eq('id', id)
+  if (error) return showAlert(error.message, false)
+
+  tr.remove()
+  showAlert('Data pelanggaran terhapus.')
 })
 
 btnTampil.addEventListener('click', async () => {
-  const classId = lapKelas.value
+  const classId   = lapKelas.value || null
   const studentId = lapSantri.value || null
-  const bulan = lapBulan.value
-  const tahun = lapTahun.value
+  const bulan     = lapBulan.value
+  const tahun     = lapTahun.value
 
   let q = supabase.from('v_violations_expanded').select('*')
-  if (classId) q = q.eq('class_id', classId)
-  if (studentId) q = q.eq('student_id', studentId)
 
-  // filter periode (hindari 31 utk semua bulan)
+  if (classId)   q = q.eq('class_id', classId)
+  if (studentId) q = q.eq('student_id', studentId)
   if (bulan && tahun) {
+    const lastDay = new Date(Number(tahun), Number(bulan), 0).getDate()
     const start = `${tahun}-${bulan}-01`
-    const end = `${tahun}-${bulan}-31`
+    const end   = `${tahun}-${bulan}-${String(lastDay).padStart(2,'0')}`
     q = q.gte('date_at', start).lte('date_at', end)
   }
 
@@ -254,130 +315,100 @@ btnTampil.addEventListener('click', async () => {
   if (error) return showAlert(error.message, false)
 
   lastData = data || []
-  sortState = { key: 'date_at', dir: 'desc' }
-  renderLapTable(applySort(lastData))
-  updateSortIcons()
-
-  const kelasOpt  = lapKelas.options[lapKelas.selectedIndex]?.text || ''
-  const santriOpt = lapSantri.value ? (lapSantri.options[lapSantri.selectedIndex]?.text || '') : 'Semua'
-  const periode   = bulan ? `${bulan}-${tahun}` : `Semua Bulan`
-  lapTitle && (lapTitle.textContent = 'Laporan Pelanggaran Santri')
-  lapSubtitle.textContent = `Kelas: ${kelasOpt} | Santri: ${santriOpt} | Periode: ${periode}`
-
+  renderLapTable(lastData)
   showAlert(`Menampilkan ${lastData.length} data.`)
+
+  const kelasText  = lapKelas.value ? (lapKelas.options[lapKelas.selectedIndex].text) : 'Semua Kelas'
+  const santriText = lapSantri.value ? (lapSantri.options[lapSantri.selectedIndex].text) : 'Semua'
+  const bulanText  = lapBulan.value ? lapBulan.options[lapBulan.selectedIndex].text : 'Semua Bulan'
+  lapTitle.textContent    = 'Laporan Pelanggaran Santri'
+  lapSubtitle.textContent = `Kelas: ${kelasText} | Santri: ${santriText} | Periode: ${bulanText} ${lapTahun.value || ''}`.trim()
 })
 
-btnCetak.addEventListener('click', () => window.print())
+btnCetak.addEventListener('click', () => { window.print() })
 
-/* ===== helper pastikan html2pdf ada ===== */
-async function ensureHtml2Pdf() {
-  if (window.html2pdf) return
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script')
-    s.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
-    s.onload = resolve
-    s.onerror = () => reject(new Error('Gagal memuat html2pdf'))
-    document.head.appendChild(s)
+function ensureHtml2Pdf() {
+  return new Promise((resolve, reject) => {
+    const ok = typeof window.html2pdf !== 'undefined'
+    ok ? resolve() : reject(new Error('html2pdf belum dimuat'))
   })
 }
 
-// ===== Buat PDF dari data langsung (tanpa html2canvas) =====
-btnPdfWa.addEventListener('click', async () => {
+/* ===== handler PDF + WA: kirim ke wali kelas (nama & nomor) ===== */
+btnKirimWa.addEventListener('click', async () => {
   try {
-    if (!lastData.length) {
-      showAlert('Tampilkan data dulu sebelum membuat PDF.', false)
-      return
-    }
+    await ensureHtml2Pdf()
+  } catch (e) {
+    showAlert(e.message || 'html2pdf belum dimuat', false)
+    return
+  }
+  if (!lastData.length) {
+    showAlert('Tampilkan data dulu sebelum membuat PDF.', false)
+    return
+  }
 
-    // Ambil ringkasan
-    const ringkasan = lapSubtitle?.textContent?.trim() || '-'
+  const opt = {
+    margin: 10,
+    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  }
 
-    const { jsPDF } = window.jspdf
-    const doc = new jsPDF('landscape', 'mm', 'a4')
+  // ambil blob secara aman (menghindari RangeError)
+  const blob = await window.html2pdf()
+    .set(opt)
+    .from(lapWrap)
+    .toPdf()
+    .get('pdf')
+    .then(pdf => pdf.output('blob'))
 
-    // Judul
-    doc.setFontSize(14)
-    doc.text('Laporan Pelanggaran Santri', 14, 14)
-    doc.setFontSize(10)
-    doc.text(ringkasan, 14, 20)
+  const buf = await blob.arrayBuffer()
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
 
-    // Buat tabel dari data
-    const head = [['No', 'Nama Santri', 'Kelas', 'Pelanggaran', 'Tanggal', 'Jam', 'Keterangan']]
-    const body = lastData.map((r, i) => [
-      String(i + 1),
-      r.student_name || '',
-      r.kelas || '',
-      r.violation || '',
-      r.date_at || '',
-      r.time_at || '',
-      r.notes || ''
-    ])
-
-    doc.autoTable({
-      head,
-      body,
-      startY: 26,
-      margin: { left: 14, right: 14 },
-      styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [27, 86, 226] },
-      theme: 'grid'
-    })
-
-    // Konversi ke base64
-    const arrayBuf = doc.output('arraybuffer')
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)))
-    const filename = `laporan-pelanggaran-${Date.now()}.pdf`
-
-    // Upload ke serverless function
+  try {
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, base64 })
+      body: JSON.stringify({ filename: opt.filename, base64 })
     })
-
-    let json
-    try {
-      json = await res.json()
-    } catch {
-      showAlert('Upload gagal (balasan bukan JSON).', false)
-      return
-    }
-
-    if (!res.ok) {
-      showAlert(json?.error || 'Upload gagal', false)
-      return
-    }
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || 'Upload gagal')
 
     const url = json.publicUrl
-    const text = encodeURIComponent(
-      `Assalamu'alaikum. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
-    )
-    window.open(`https://wa.me/?text=${text}`, '_blank')
-    showAlert('PDF berhasil dibuat & link WhatsApp dibuka.', true)
+
+    // nomor & nama wali kelas dari classes
+    const kelasId = lapKelas.value || null
+    const kelasObj = kelasId ? CLASS_MAP.get(kelasId) : null
+    const waliName  = kelasObj?.wali_name || 'Wali Kelas'
+    const waliPhone = toWa62(kelasObj?.wali_phone)
+
+    const ringkasan = lapSubtitle?.textContent?.trim() || ''
+    const pesan = `Assalamu'alaikum ${waliName}. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
+    const waText = encodeURIComponent(pesan)
+    const waUrl  = waliPhone ? `https://wa.me/${waliPhone}?text=${waText}` : `https://wa.me/?text=${waText}`
+
+    window.open(waUrl, '_blank')
+    showAlert('PDF berhasil dibuat & tautan WA dibuka.', true)
   } catch (e) {
-    console.error(e)
-    showAlert(e.message || 'Gagal membuat/mengunggah PDF', false)
+    showAlert(e.message || 'Gagal upload PDF', false)
   }
 })
 
-
-
-
 /* ================= init ================= */
 ;(async function init() {
-  await loadClasses()
+  // preset dropdown pelanggaran (panel santri)
+  fillViolationSelect(sanPelanggaranSel)
+
+  // tanggal default panel santri
+  sanTanggal.valueAsDate = new Date()
+
+  // load kelas
+  const classes = await loadClasses()
+
+  // render rows untuk panel Input per Kelas (kelas pertama)
   if (selectKelas.value) {
     const students = await loadStudentsByClass(selectKelas.value)
     renderKelasRows(students)
-  }
-  // default tanggal per santri
-  sanTanggal.valueAsDate = new Date()
-  // default tahun
-  fillMonthYearDropdowns()
-  // opsi santri untuk laporan awal
-  if (lapKelas.value) {
-    const students = await loadStudentsByClass(lapKelas.value)
-    lapSantri.innerHTML = `<option value="">Semua Santri</option>` +
-      students.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
   }
 })()
