@@ -394,7 +394,7 @@ async function queryLaporan() {
   // ambil dari view yang sudah kamu buat: v_violations_expanded
   let q = supabase.from('v_violations_expanded')
   // pakai alias: ambil "kelas" tapi beri nama "class_name"
-  .select('id, student_id, student_name, class_id, class_name:kelas, violation, date_at, time_at, notes')
+  .select('id, student_id, student_name, class_id, kelas, violation, date_at, time_at, notes')
   .order('date_at', { ascending: false })
   .order('time_at', { ascending: false });
 
@@ -426,7 +426,7 @@ function renderLaporanTable() {
     tr.innerHTML = `
       <td class="p-2 border text-center">${i+1}</td>
       <td class="p-2 border">${row.student_name || ''}</td>
-      <td class="p-2 border">${row.class_name   || ''}</td>
+      <td class="p-2 border">${row.kelas   || ''}</td>
       <td class="p-2 border">${row.violation    || ''}</td>
       <td class="p-2 border">${fmtDate(row.date_at) || ''}</td>
       <td class="p-2 border">${fmtTime(row.time_at) || ''}</td>
