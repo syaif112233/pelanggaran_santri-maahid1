@@ -28,6 +28,8 @@ function showAlert(msg, ok=true) {
   box.classList.toggle('text-red-800', !ok);
   setTimeout(()=>box.classList.add('hidden'), 3000);
 }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
 
 // ===== REF ELEMEN (pakai fallback agar cocok dengan HTML lama/baru) =====
 const tabKelas   = document.querySelector('#tab-kelas');
@@ -192,7 +194,11 @@ function showPanel(which){
 }
 
 tabKelas?.addEventListener('click', ()=>showPanel('kelas'));
-tabSantri?.addEventListener('click', ()=>showPanel('santri'));
+tabSantri?.addEventListener('click', ()=>{
+  showPanel('santri');
+  if (tanggalSantri && !tanggalSantri.value) tanggalSantri.value = todayStr();
+});
+
 tabLap?.addEventListener('click',   ()=>showPanel('lap'));
 
 // ======================= EVENT LISTENERS UTAMA =======================
@@ -267,12 +273,15 @@ btnSimpanSantri?.addEventListener('click', async ()=>{
 // ===== END: bootstrap awal =====
 
 // ===== Inisialisasi awal =====
+if (tanggalSantri) tanggalSantri.value = todayStr();
+
 try {
   showPanel?.('kelas');           // tampilkan tab "Input per Kelas" saat load
   await loadKelasSemua();         // <-- penting: isi semua dropdown kelas
 } catch (e) {
   showAlert(e.message || 'Gagal memuat data awal', false);
 }
+
 
 
 // (lanjutan file kamu: fungsi render laporan, sort kolom, generate PDF & kirim WA, hapus data, dll)
@@ -435,6 +444,21 @@ async function ensureHtml2Pdf() {
   throw new Error('html2pdf belum termuat');
 }
 
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result || '';
+      // hasil dataURL: "data:application/pdf;base64,XXXXX"
+      const base64 = String(res).split(',')[1] || '';
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+
 btnPdfWa?.addEventListener('click', async () => {
   try {
     await ensureHtml2Pdf();
@@ -463,11 +487,10 @@ btnPdfWa?.addEventListener('click', async () => {
   try {
     const blob = await html2pdf().set(opt).from(sourceEl).toPdf().get('pdf').then(pdf => pdf.output('blob'));
     // kembali tampilkan kolom aksi di UI
-    document.body.classList.remove('pdf-mode');
+    document.body.classList.remove('pdf-mode');  // tampilkan lagi kolom Aksi
 
-    // upload ke /api/upload-report
-    const buffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const base64 = await blobToBase64(blob);
+    
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -475,7 +498,7 @@ btnPdfWa?.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json?.error || 'Upload gagal');
-
+    
     const url = json.publicUrl;
     showAlert('PDF berhasil dibuat & diupload.', true);
 
