@@ -402,37 +402,90 @@ function syncWaliFromFilter() {
   };
 }
 
+function monthToNumber(val) {
+  const v = String(val || '').trim().toLowerCase();
+  if (!v) return null;
+  const n = parseInt(v, 10);
+  if (!Number.isNaN(n) && n >= 1 && n <= 12) return n;
+
+  const map = {
+    'januari':1,'februari':2,'maret':3,'april':4,'mei':5,'juni':6,
+    'juli':7,'agustus':8,'september':9,'oktober':10,'november':11,'desember':12,
+    'january':1,'february':2,'march':3,'april':4,'may':5,'june':6,
+    'july':7,'august':8,'september':9,'october':10,'november':11,'december':12,
+    'semua': null, 'all': null
+  };
+  return map[v] ?? null;
+}
+
+
 /******************** QUERY & RENDER LAPORAN ********************/
-async function queryLaporan() {
-  const classId = filterKelas?.value || '';
-  const studentId = filterSantri?.value || '';
-  const bulan = (filterBulan?.value || '').padStart(2, '0');
-  const tahun = (filterTahun?.value || '').trim();
+//async function queryLaporan() {
+//  const classId = filterKelas?.value || '';
+//  const studentId = filterSantri?.value || '';
+//  const bulan = (filterBulan?.value || '').padStart(2, '0');
+//  const tahun = (filterTahun?.value || '').trim();
 
   // ambil dari view yang sudah kamu buat: v_violations_expanded
-  let q = supabase.from('v_violations_expanded')
+//  let q = supabase.from('v_violations_expanded')
   // pakai alias: ambil "kelas" tapi beri nama "class_name"
-  .select('id, student_id, student_name, class_id, kelas, violation, date_at, time_at, notes')
-  .order('date_at', { ascending: false })
-  .order('time_at', { ascending: false });
+//  .select('id, student_id, student_name, class_id, kelas, violation, date_at, time_at, notes')
+//  .order('date_at', { ascending: false })
+//  .order('time_at', { ascending: false });
 
+
+//  if (classId)   q = q.eq('class_id', classId);
+//  if (studentId) q = q.eq('student_id', studentId);
+
+  // filter bulan/tahun apabila diisi
+//  if (tahun) {
+//    q = q.filter('date_at', 'gte', `${tahun}-01-01`).filter('date_at', 'lte', `${tahun}-12-31`);
+//  }
+//  if (bulan && tahun) {
+//    q = q.filter('date_at', 'gte', `${tahun}-${bulan}-01`)
+//         .filter('date_at', 'lt',  `${tahun}-${bulan === '12' ? '13' : (('0'+(parseInt(bulan)+1)).slice(-2))}-01`);
+//  }
+
+//  const { data, error } = await q;
+//  if (error) throw error;
+// lastLaporan = data || [];
+//}
+
+async function queryLaporan() {
+  const classId   = filterKelas?.value || '';
+  const studentId = filterSantri?.value || '';
+
+  const yearNum  = parseInt((filterTahun?.value || '').trim(), 10);
+  const bulanNum = monthToNumber(filterBulan?.value);
+
+  let q = supabase
+    .from('v_violations_expanded')
+    .select('id, student_id, student_name, class_id, kelas, violation, date_at, time_at, notes')
+    .order('date_at', { ascending: false })
+    .order('time_at', { ascending: false });
 
   if (classId)   q = q.eq('class_id', classId);
   if (studentId) q = q.eq('student_id', studentId);
 
-  // filter bulan/tahun apabila diisi
-  if (tahun) {
-    q = q.filter('date_at', 'gte', `${tahun}-01-01`).filter('date_at', 'lte', `${tahun}-12-31`);
+  // === Filter tanggal ===
+  if (yearNum && bulanNum) {
+    // contoh: 2025 & 10 (Okt) -> [2025-10-01, 2025-11-01)
+    const start = new Date(yearNum, bulanNum - 1, 1);
+    const end   = new Date(yearNum, bulanNum, 1); // awal bulan berikutnya
+    const s = start.toISOString().slice(0, 10);
+    const e = end.toISOString().slice(0, 10);
+    q = q.gte('date_at', s).lt('date_at', e);
+  } else if (yearNum) {
+    // contoh: 2025 -> [2025-01-01, 2025-12-31]
+    q = q.gte('date_at', `${yearNum}-01-01`).lte('date_at', `${yearNum}-12-31`);
   }
-  if (bulan && tahun) {
-    q = q.filter('date_at', 'gte', `${tahun}-${bulan}-01`)
-         .filter('date_at', 'lt',  `${tahun}-${bulan === '12' ? '13' : (('0'+(parseInt(bulan)+1)).slice(-2))}-01`);
-  }
+  // (kalau tahun kosong → biarkan tanpa filter tanggal)
 
   const { data, error } = await q;
   if (error) throw error;
   lastLaporan = data || [];
 }
+
 
 function renderLaporanTable() {
   const tbody = tbodyLaporanView || byId('tbodyLaporan') || byId('tbodyLaporanView');
