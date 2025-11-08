@@ -26,6 +26,29 @@
     th[data-sort] { cursor:pointer; user-select:none; }
     .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
     .hidden-input { display:none; }
+
+    /* === PDF friendly === */
+:root{ --pdf-width: 1040px; }             /* pas untuk A4 landscape - 10mm margin */
+
+#lap-wrap{ width: var(--pdf-width); margin:0 auto; }
+/* pastikan tak ada padding kontainer saat render PDF */
+.pdf-mode .mx-auto, 
+.pdf-mode .container { padding:0 !important; margin:0 !important; }
+
+/* thead muncul tiap halaman, baris tidak patah di tengah */
+@media print{
+  #lap-table { table-layout: fixed; border-collapse: collapse; }
+  #lap-table thead { display: table-header-group; }
+  #lap-table tfoot { display: table-footer-group; }
+  #lap-table tr { break-inside: avoid; page-break-inside: avoid; }
+  @page { margin: 10mm; }                 /* hilangkan “ruang kosong” atas */
+}
+
+/* kolom aksi DISEMBUNYIKAN saat render PDF */
+.pdf-mode .col-aksi{ display:none !important; }
+    .col-aksi { white-space: nowrap; width: 72px; }
+
+
   </style>
 </head>
 
@@ -152,28 +175,36 @@
       </div>
 
       <!-- area yang diprint / di-PDF -->
-      <div id="lap-wrap" class="overflow-x-auto mt-4 bg-white border rounded">
-        <div class="px-6 pt-6 pb-2 text-center">
-          <h3 class="text-xl font-semibold">Laporan Pelanggaran Santri</h3>
-          <div id="lap-title" class="hidden"></div>
-          <div id="lap-subtitle" class="text-sm text-gray-600"></div>
-          <div id="lap-meta" class="text-xs text-gray-500"></div>
-        </div>
-        <table id="lap-table" class="w-full bg-white border">
-          <thead class="bg-gray-100">
-            <tr>
-              <th class="p-2 border">No</th>
-              <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico" id="ico-student_name"></span></th>
-              <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico" id="ico-kelas"></span></th>
-              <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico" id="ico-violation"></span></th>
-              <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico" id="ico-date_at"></span></th>
-              <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico" id="ico-time_at"></span></th>
-              <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico" id="ico-notes"></span></th>
-              <th class="p-2 border">Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyLaporan"></tbody>
-        </table>
+      <table id="lap-table" class="w-full bg-white border">
+  <thead class="bg-gray-100">
+    <tr>
+      <th class="p-2 border">No</th>
+      <th class="p-2 border" data-sort="student_name">
+        Nama Santri <span class="sort-ico" id="ico-student_name"></span>
+      </th>
+      <th class="p-2 border" data-sort="kelas">
+        Kelas <span class="sort-ico" id="ico-kelas"></span>
+      </th>
+      <th class="p-2 border" data-sort="violation">
+        Pelanggaran <span class="sort-ico" id="ico-violation"></span>
+      </th>
+      <th class="p-2 border" data-sort="date_at">
+        Tanggal <span class="sort-ico" id="ico-date_at"></span>
+      </th>
+      <th class="p-2 border" data-sort="time_at">
+        Jam <span class="sort-ico" id="ico-time_at"></span>
+      </th>
+      <th class="p-2 border" data-sort="notes">
+        Keterangan <span class="sort-ico" id="ico-notes"></span>
+      </th>
+      <!-- Kolom AKSI hanya TH di header, tanpa tombol -->
+      <th class="p-2 border col-aksi" data-col="aksi" id="col-aksi">Aksi</th>
+    </tr>
+  </thead>
+
+  <tbody id="tbodyLaporan"></tbody>
+</table>
+
       </div>
     </section>
   </div>
