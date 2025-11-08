@@ -376,6 +376,21 @@ function ensureHtml2Pdf() {
   })
 }
 
+// Helper konversi blob ke base64 aman untuk file besar
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result || ''
+      const base64 = String(result).split(',')[1] || ''
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+
 /* ===== handler PDF + WA: buka langsung nomor wali kelas ===== */
 btnPdfWa.addEventListener('click', async () => {
   try { await ensureHtml2Pdf() } 
@@ -399,8 +414,10 @@ btnPdfWa.addEventListener('click', async () => {
     .get('pdf')
     .then(pdf => pdf.output('blob'))
 
-  const buf = await blob.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+  // const buf = await blob.arrayBuffer()
+// const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+const base64 = await blobToBase64(blob)
+
 
   // upload ke route serverless: /api/upload-report (sudah kamu buat)
   let url = ''
