@@ -132,6 +132,11 @@ async function loadKelasSemua() {
   if (selKelasPerKelas.value) await renderPerKelas(selKelasPerKelas.value);
   if (selKelasPerSantri.value) await loadSantriByClass(selKelasPerSantri.value);
 }
+// setelah loadKelasSemua() atau di inisialisasi awal
+if (filterTahun && !filterTahun.value) {
+  filterTahun.value = String(new Date().getFullYear());
+}
+
 
 async function loadSantriByClass(class_id){
   if (!class_id) {
@@ -402,10 +407,29 @@ function syncWaliFromFilter() {
   };
 }
 
+// function monthToNumber(val) {
+//   const v = String(val || '').trim().toLowerCase();
+//   if (!v) return null;
+//   const n = parseInt(v, 10);
+//   if (!Number.isNaN(n) && n >= 1 && n <= 12) return n;
+
+//   const map = {
+//     'januari':1,'februari':2,'maret':3,'april':4,'mei':5,'juni':6,
+//     'juli':7,'agustus':8,'september':9,'oktober':10,'november':11,'desember':12,
+//     'january':1,'february':2,'march':3,'april':4,'may':5,'june':6,
+//     'july':7,'august':8,'september':9,'october':10,'november':11,'december':12,
+//     'semua': null, 'all': null
+//   };
+//   return map[v] ?? null;
+// }
 function monthToNumber(val) {
   const v = String(val || '').trim().toLowerCase();
   if (!v) return null;
-  const n = parseInt(v, 10);
+
+  // dukung value gabungan seperti "10|Oktober"
+  const first = v.split('|')[0];
+
+  const n = parseInt(first, 10);
   if (!Number.isNaN(n) && n >= 1 && n <= 12) return n;
 
   const map = {
@@ -415,8 +439,9 @@ function monthToNumber(val) {
     'july':7,'august':8,'september':9,'october':10,'november':11,'december':12,
     'semua': null, 'all': null
   };
-  return map[v] ?? null;
+  return map[first] ?? null;
 }
+
 
 
 /******************** QUERY & RENDER LAPORAN ********************/
@@ -451,6 +476,48 @@ function monthToNumber(val) {
 // lastLaporan = data || [];
 //}
 
+// async function queryLaporan() {
+//   const classId   = filterKelas?.value || '';
+//   const studentId = filterSantri?.value || '';
+
+//   const yearNum  = parseInt((filterTahun?.value || '').trim(), 10);
+//   const bulanNum = monthToNumber(filterBulan?.value);
+
+//   let q = supabase
+//     .from('v_violations_expanded')
+//     .select('id, student_id, student_name, class_id, kelas, violation, date_at, time_at, notes')
+//     .order('date_at', { ascending: false })
+//     .order('time_at', { ascending: false });
+
+//   if (classId)   q = q.eq('class_id', classId);
+//   if (studentId) q = q.eq('student_id', studentId);
+
+//   // === Filter tanggal yang benar ===
+//   if (bulanNum && !yearNum) {
+//     // kalau user pilih bulan tapi tahun kosong → kasih info & hentikan
+//     showAlert('Pilih Tahun terlebih dulu saat memfilter berdasarkan Bulan.', false);
+//     const { data, error } = await q; // tanpa filter tanggal
+//     if (error) throw error;
+//     lastLaporan = data || [];
+//     return;
+//   }
+
+//   if (yearNum && bulanNum) {
+//     const mm   = String(bulanNum).padStart(2, '0');
+//     const y2   = bulanNum === 12 ? yearNum + 1 : yearNum;
+//     const mm2  = String(bulanNum === 12 ? 1 : bulanNum + 1).padStart(2, '0');
+//     const start = `${yearNum}-${mm}-01`; // inklusif
+//     const end   = `${y2}-${mm2}-01`;     // eksklusif
+//     q = q.gte('date_at', start).lt('date_at', end);
+//   } else if (yearNum) {
+//     q = q.gte('date_at', `${yearNum}-01-01`).lte('date_at', `${yearNum}-12-31`);
+//   }
+
+//   const { data, error } = await q;
+//   if (error) throw error;
+//   lastLaporan = data || [];
+// }
+
 async function queryLaporan() {
   const classId   = filterKelas?.value || '';
   const studentId = filterSantri?.value || '';
@@ -467,24 +534,36 @@ async function queryLaporan() {
   if (classId)   q = q.eq('class_id', classId);
   if (studentId) q = q.eq('student_id', studentId);
 
-  // === Filter tanggal ===
+  // === Filter tanggal yang benar ===
+  if (bulanNum && !yearNum) {
+    showAlert('Pilih Tahun terlebih dulu saat memfilter berdasarkan Bulan.', false);
+    const { data, error } = await q; // tanpa filter tanggal
+    if (error) throw error;
+    lastLaporan = data || [];
+    return;
+  }
+
   if (yearNum && bulanNum) {
-    // contoh: 2025 & 10 (Okt) -> [2025-10-01, 2025-11-01)
-    const start = new Date(yearNum, bulanNum - 1, 1);
-    const end   = new Date(yearNum, bulanNum, 1); // awal bulan berikutnya
-    const s = start.toISOString().slice(0, 10);
-    const e = end.toISOString().slice(0, 10);
-    q = q.gte('date_at', s).lt('date_at', e);
+    const mm   = String(bulanNum).padStart(2, '0');
+    const y2   = bulanNum === 12 ? yearNum + 1 : yearNum;
+    const mm2  = String(bulanNum === 12 ? 1 : bulanNum + 1).padStart(2, '0');
+    const start = `${yearNum}-${mm}-01`;
+    const end   = `${y2}-${mm2}-01`;
+
+    **console.log('[FILTER BULAN]', { yearNum, bulanNum, start, end });**
+
+    q = q.gte('date_at', start).lt('date_at', end);
   } else if (yearNum) {
-    // contoh: 2025 -> [2025-01-01, 2025-12-31]
+    **console.log('[FILTER TAHUN]', { yearNum, span: 'full-year' });**
     q = q.gte('date_at', `${yearNum}-01-01`).lte('date_at', `${yearNum}-12-31`);
   }
-  // (kalau tahun kosong → biarkan tanpa filter tanggal)
 
   const { data, error } = await q;
   if (error) throw error;
   lastLaporan = data || [];
 }
+
+
 
 
 function renderLaporanTable() {
@@ -725,4 +804,15 @@ tabLap?.addEventListener('click', async () => {
     showAlert(e.message || 'Gagal menyiapkan filter laporan', false);
   }
 });
+
+filterBulan?.addEventListener('change', async () => {
+  await queryLaporan();
+  renderLaporanTable();
+});
+
+filterTahun?.addEventListener('change', async () => {
+  await queryLaporan();
+  renderLaporanTable();
+});
+
 
