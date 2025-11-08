@@ -346,9 +346,11 @@ async function queryLaporan() {
 
   // ambil dari view yang sudah kamu buat: v_violations_expanded
   let q = supabase.from('v_violations_expanded')
-    .select('id, student_id, student_name, class_id, class_name, violation, date_at, time_at, notes')
-    .order('date_at', { ascending: false })
-    .order('time_at', { ascending: false });
+  // pakai alias: ambil "kelas" tapi beri nama "class_name"
+  .select('id, student_id, student_name, class_id, class_name:kelas, violation, date_at, time_at, notes')
+  .order('date_at', { ascending: false })
+  .order('time_at', { ascending: false });
+
 
   if (classId)   q = q.eq('class_id', classId);
   if (studentId) q = q.eq('student_id', studentId);
