@@ -482,6 +482,55 @@ async function ensureHtml2Pdf() {
   throw new Error('html2pdf belum termuat');
 }
 
+async function generatePdfBlob(sourceEl, opt) {
+  await ensureHtml2Pdf();
+  if (!sourceEl) throw new Error('Elemen laporan tidak ditemukan.');
+
+  document.body.classList.add('pdf-mode');
+
+  const instance = html2pdf().set(opt).from(sourceEl).toPdf();
+  const pdf = await instance.get('pdf');  // html2pdf v0.10.x → TANPA callback
+  const blob = pdf.output('blob');
+
+  document.body.classList.remove('pdf-mode');
+  return blob;
+}
+
+function arrayBufferToBase64(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+}
+
+async function uploadReport(filename, base64) {
+  const res = await fetch('/api/upload-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, base64 })
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || 'Upload gagal');
+  return json.publicUrl;
+}
+
+function openWaWithReport(publicUrl) {
+  // Ambil meta wali dari filter (kamu sudah punya syncWaliFromFilter)
+  syncWaliFromFilter();
+  const phone = normalizePhone(lastClassMeta?.wali_phone || '');
+  const waliName = lastClassMeta?.wali_name ? `Bapak/Ibu ${lastClassMeta.wali_name}` : 'Wali Kelas';
+  const ringkasan =
+    lapSubtitle?.textContent?.trim() ||
+    `Kelas: ${filterKelas?.selectedOptions?.[0]?.text || 'Semua Kelas'} | Periode: ${(filterBulan?.selectedOptions?.[0]?.text || 'Semua')} ${(filterTahun?.value || '')}`;
+
+  const text = encodeURIComponent(
+    `Assalamu'alaikum ${waliName}. Berikut laporan pelanggaran santri (${ringkasan}).\nPDF: ${publicUrl}`
+  );
+
+  const waUrl = phone
+    ? `https://api.whatsapp.com/send?phone=${phone}&text=${text}`
+    : `https://api.whatsapp.com/send?text=${text}`;
+
+  window.open(waUrl, '_blank');
+}
+
 
 function blobToBase64(blob){
   return new Promise((resolve, reject)=>{
@@ -503,11 +552,12 @@ btnPdfWa?.addEventListener('click', async () => {
   showLoading('Menyiapkan PDF', 'Merender tabel laporan…');
 
   try {
-    await ensureHtml2Pdf();
-    if (!lastLaporan.length) { hideLoading(); setBusy(btnPdfWa,false); return showAlert('Tampilkan data dulu sebelum membuat PDF.', false); }
+    if (!lastLaporan.length) {
+      hideLoading(); setBusy(btnPdfWa,false);
+      return showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
+    }
 
-    document.body.classList.add('pdf-mode');
-
+    const sourceEl = getLapContainerForPdf();
     const opt = {
       margin: 10,
       filename: `laporan-pelanggaran-${Date.now()}.pdf`,
@@ -516,46 +566,18 @@ btnPdfWa?.addEventListener('click', async () => {
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
 
-    const sourceEl = getLapContainerForPdf();
+    // 1) render pdf -> blob
+    const blob = await generatePdfBlob(sourceEl, opt);
 
-    // ⬇️ Versi 0.10.x: TANPA argumen pada .get('pdf')
-    showLoading('Membuat PDF', 'Mohon tunggu…');
-    // pastikan elemen sumber ada
-    if (!sourceEl) throw new Error('Elemen laporan tidak ditemukan.');
-    
-    // pisahkan jadi 2 langkah: ambil pdf dulu, lalu blob
-    const instance = html2pdf().set(opt).from(sourceEl).toPdf();
-    const pdf = await instance.get('pdf');   // tanpa argumen callback
-    const blob = pdf.output('blob');
-
-
-    document.body.classList.remove('pdf-mode');
-
-    // upload
+    // 2) upload
     showLoading('Mengunggah laporan', 'Mengirim file ke server…');
-    const buffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    const res = await fetch('/api/upload-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: opt.filename, base64 })
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || 'Upload gagal');
+    const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+    const publicUrl = await uploadReport(opt.filename, base64);
 
-    const url = json.publicUrl;
-
-    // siapkan WA
-    syncWaliFromFilter();
-    const phone = normalizePhone(lastClassMeta?.wali_phone || '');
-    const waliName = lastClassMeta?.wali_name ? `Bapak/Ibu ${lastClassMeta.wali_name}` : 'Wali Kelas';
-    const ringkasan = lapSubtitle?.textContent?.trim()
-      || `Kelas: ${filterKelas?.selectedOptions?.[0]?.text || 'Semua Kelas'} | Periode: ${(filterBulan?.selectedOptions?.[0]?.text || 'Semua')} ${(filterTahun?.value || '')}`;
-    const text = encodeURIComponent(`Assalamu'alaikum ${waliName}. Berikut laporan pelanggaran santri (${ringkasan}).\nPDF: ${url}`);
-    const waUrl = phone ? `https://api.whatsapp.com/send?phone=${phone}&text=${text}` : `https://api.whatsapp.com/send?text=${text}`;
-
+    // 3) buka WA
     showLoading('Membuka WhatsApp', 'Menyiapkan pesan…');
-    window.open(waUrl, '_blank');
+    openWaWithReport(publicUrl);
+
   } catch (e) {
     showAlert(e.message || 'Gagal membuat/mengunggah PDF', false);
   } finally {
@@ -563,6 +585,7 @@ btnPdfWa?.addEventListener('click', async () => {
     setBusy(btnPdfWa, false);
   }
 });
+
 
 
 
