@@ -4,11 +4,13 @@
   <meta charset="UTF-8" />
   <title>Sistem Pelanggaran Santri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind (CDN) -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html2pdf (wajib untuk fitur PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-  <!-- Print A4 landscape khusus kontainer laporan -->
   <style>
+    /* Cetak A4 landscape */
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body * { visibility: hidden !important; }
@@ -17,27 +19,26 @@
       #lap-table thead { display: table-header-group; }
       #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
     }
-  </style>
-  <style>
-  /* Batasi area cetak supaya tidak kebesaran untuk html2canvas */
-  #lap-wrap {
-    width: 1122px;           /* ≈ A4 landscape di 96dpi */
-    margin: 0 auto;
-    background: #fff;
-  }
-</style>
+    th[data-sort] { cursor: pointer; user-select: none; }
+    .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
 
-  <!-- html2pdf (untuk generate PDF di browser) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+    /* Penting untuk mencegah RangeError html2canvas: batasi lebar area render */
+    #lap-wrap {
+      width: 1122px;      /* ≈ A4 landscape pada ~96dpi */
+      margin: 0 auto;
+      background: #fff;
+    }
+  </style>
 </head>
+
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-6">
     <h1 class="text-3xl font-bold text-center mb-6">Sistem Pelanggaran Santri</h1>
 
     <!-- Tabs -->
     <div class="flex gap-4 border-b mb-6">
-      <button id="tab-kelas" class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
-      <button id="tab-santri" class="py-2 text-gray-600">Input per Santri</button>
+      <button id="tab-kelas"   class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
+      <button id="tab-santri"  class="py-2 text-gray-600">Input per Santri</button>
       <button id="tab-laporan" class="py-2 text-gray-600">Tampilkan & Cetak</button>
     </div>
 
@@ -87,9 +88,7 @@
       <div class="grid md:grid-cols-2 gap-4 mt-4">
         <div>
           <label class="block font-semibold mb-1">Pelanggaran</label>
-          <!-- dropdown preset + input Lainnya -->
-          <select id="sanPelanggaranSel" class="w-full border rounded px-3 py-2"></select>
-          <input id="sanPelanggaranOther" class="w-full border rounded px-3 py-2 mt-2 hidden" placeholder="Isi pelanggaran..." />
+          <input id="sanPelanggaran" class="w-full border rounded px-3 py-2" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -118,7 +117,7 @@
       <div class="grid md:grid-cols-4 gap-3 mb-4">
         <div>
           <label class="block font-semibold mb-1">Kelas</label>
-          <select id="lapKelas" class="w-full border rounded px-3 py-2"><!-- akan diisi JS (ada "Semua Kelas") --></select>
+          <select id="lapKelas" class="w-full border rounded px-3 py-2"></select>
         </div>
         <div>
           <label class="block font-semibold mb-1">Santri (opsional)</label>
@@ -144,30 +143,28 @@
         </div>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex gap-3 mb-3">
         <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
-        <button id="btnCetak" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Cetak</button>
-        <button id="btnKirimWa" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Buat PDF & Kirim WA</button>
+        <button id="btnCetak" class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-800">Cetak</button>
+        <button id="btnPdfWa" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Buat PDF & Kirim WA</button>
       </div>
 
-      <!-- area yang diprint / dijadikan PDF -->
-      <div id="lap-wrap" class="mt-4 bg-white border rounded">
-        <div class="p-4 border-b">
-          <h3 id="lap-title" class="text-xl font-bold">Laporan Pelanggaran Santri</h3>
-          <p id="lap-subtitle" class="text-gray-600">-</p>
-        </div>
+      <!-- Area yang dirender jadi PDF -->
+      <div id="lap-wrap" class="shadow rounded bg-white p-4">
+        <h3 id="lap-title" class="text-xl font-semibold text-center">Laporan Pelanggaran Santri</h3>
+        <p id="lap-subtitle" class="text-center text-sm text-gray-600 mb-3"></p>
+
         <div class="overflow-x-auto">
-          <table id="lap-table" class="w-full bg-white">
+          <table id="lap-table" class="w-full bg-white border">
             <thead class="bg-gray-100">
               <tr>
                 <th class="p-2 border">No</th>
-                <th class="p-2 border">Nama Santri</th>
-                <th class="p-2 border">Kelas</th>
-                <th class="p-2 border">Pelanggaran</th>
-                <th class="p-2 border">Tanggal</th>
-                <th class="p-2 border">Jam</th>
-                <th class="p-2 border">Keterangan</th>
-                <th class="p-2 border">Aksi</th>
+                <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico" id="ico-student_name"></span></th>
+                <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico" id="ico-kelas"></span></th>
+                <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico" id="ico-violation"></span></th>
+                <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico" id="ico-date_at"></span></th>
+                <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico" id="ico-time_at"></span></th>
+                <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico" id="ico-notes"></span></th>
               </tr>
             </thead>
             <tbody id="tbodyLaporan"></tbody>
