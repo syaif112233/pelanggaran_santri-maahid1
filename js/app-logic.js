@@ -477,6 +477,9 @@ function getLapContainerForPdf() {
   return lapWrap || document.querySelector('#lap-table');
 }
 
+console.log('html2pdf type:', typeof window.html2pdf);
+
+
 async function ensureHtml2Pdf() {
   if (typeof window.html2pdf === 'function' || typeof window.html2pdf === 'object') return;
   throw new Error('html2pdf belum termuat');
