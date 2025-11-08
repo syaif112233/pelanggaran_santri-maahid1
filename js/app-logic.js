@@ -1,13 +1,18 @@
-/* js/app-logic.js
-   Versi full – laporan + input + kirim WA
-   Menggunakan window.supabase dari js/supabaseClient.js
-*/
-// paling atas app-logic.js (sebelum kode lain)
-// --- ambil klien supabase dari global dan pastikan siap ---
+/*************************************************
+ * app-logic.js (FULL)
+ * - Pisah alur per-kelas vs per-santri (aman)
+ * - html2pdf v0.10.x: .set().from().toPdf().get('pdf')
+ * - Upload ke /api/upload-report (Vercel serverless)
+ * - WA langsung ke wali kelas (nama + nomor)
+ * - Aksi hapus (disembunyikan saat PDF)
+ * - Dropdown Pelanggaran: opsi "Lainnya…" -> input teks
+ **************************************************/
+
+/* ============== SUPABASE CLIENT (global) ============== */
+// Supabase client diexpose oleh js/supabaseClient.js ke window.supabase.
+// Di sini kita tunggu sampai siap agar tidak undefined.
 async function getSupabase() {
   if (window.supabase) return window.supabase;
-
-  // tunggu event dari supabaseClient.js (maks 3 detik)
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('Supabase client belum siap')), 3000);
     window.addEventListener('supabase-ready', () => {
@@ -15,513 +20,455 @@ async function getSupabase() {
       resolve();
     }, { once: true });
   });
-
   return window.supabase;
 }
-
-// gunakan satu instance di seluruh file
 const supabase = await getSupabase();
 
-
-/////////////////////// UTIL ///////////////////////
-const $ = (sel) => document.querySelector(sel);
+/* ================== UTIL & STATE ================== */
+const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-function showAlert(msg, ok = true) {
-  // tampilkan notifikasi sederhana di atas (opsional ganti sesuai punyamu)
-  const box = document.createElement('div');
-  box.textContent = msg;
-  box.className = `mx-auto my-3 max-w-4xl rounded border px-4 py-2 text-sm ${
-    ok ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-  }`;
-  document.body.prepend(box);
-  setTimeout(() => box.remove(), 3500);
-}
-
-function pad2(n) { return n.toString().padStart(2, '0'); }
-
-function normalizePhone(idn) {
-  if (!idn) return '';
-  let s = String(idn).replace(/[^\d]/g, '');
-  if (s.startsWith('0')) s = '62' + s.slice(1);
-  if (!s.startsWith('62')) s = '62' + s;
-  return s;
-}
-
-// untuk desktop WA kadang lebih stabil pakai api.whatsapp.com
-function openWhatsApp(phone, text) {
-  const p = normalizePhone(phone);
-  const t = encodeURIComponent(text);
-  const url = `https://api.whatsapp.com/send?phone=${p}&text=${t}`;
-  window.open(url, '_blank');
-}
-
-/////////////////////// ELEMEN GLOBAL (TAB TAMPIL & CETAK) ///////////////////////
-const selectKelas   = $('#selectKelas');
-const selectSantri  = $('#selectSantri');     // opsional
-const selectBulan   = $('#selectBulan');      // "Semua" / 1..12 (value numerik string)
-const inputTahun    = $('#inputTahun');
-const btnTampilkan  = $('#btnTampilkan');
-const btnCetak      = $('#btnCetak');
-const btnPdfWa      = $('#btnPdfWa');
-
-const lapWrap       = $('#lap-wrap');     // wrapper yang diprint/pdf
-const lapTable      = $('#lap-table');
-const lapTitle      = $('#lap-title');
-const lapSubtitle   = $('#lap-subtitle');
-const lapMeta       = $('#lap-meta');
-const tbodyLaporan  = $('#tbodyLaporan');
-
-// simpan data terakhir untuk PDF/WA
-let lastData = [];
-let lastClassMeta = null; // { kelas: '10 A', wali_phone: '...', wali_name: '...' }
-
-/////////////////////// HTML2PDF LOADER ///////////////////////
-async function ensureHtml2Pdf() {
-  if (window.html2pdf) return;
-  // loader aman
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.defer = true;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('html2pdf gagal dimuat'));
-    document.head.appendChild(s);
-  });
-}
-
-/////////////////////// LOAD KELAS & SANTRI ///////////////////////
-async function loadClasses() {
-  const { data, error } = await supabase.from('classes')
-    .select('id, kelas, wali_phone, wali_name')
-    .order('kelas');
-  if (error) { showAlert(error.message, false); return; }
-
-  // DropDown Tampil & Cetak
-  selectKelas.innerHTML = [
-    `<option value="">Semua Kelas</option>`,
-    ...data.map(c => `<option value="${c.id}">${c.kelas}</option>`)
-  ].join('');
-
-  // simpan map class_id -> meta, untuk WA
-  classMap = {};
-  data.forEach(c => { classMap[c.id] = c; });
-}
-let classMap = {};
-
-async function loadStudentsByClass(classId) {
-  if (!classId) {
-    selectSantri.innerHTML = `<option value="">Semua Santri</option>`;
-    return;
-  }
-  const { data, error } = await supabase.from('students')
-    .select('id, name')
-    .eq('class_id', classId)
-    .order('name');
-  if (error) { showAlert(error.message, false); return; }
-
-  selectSantri.innerHTML = [
-    `<option value="">Semua Santri</option>`,
-    ...data.map(s => `<option value="${s.id}">${s.name}</option>`)
-  ].join('');
-}
-
-selectKelas?.addEventListener('change', async () => {
-  await loadStudentsByClass(selectKelas.value);
-});
-
-/////////////////////// TAMPILKAN DATA ///////////////////////
-async function tampilkanLaporan() {
-  const classId = selectKelas.value || '';
-  const studentId = selectSantri.value || '';
-  const bulan = selectBulan.value || 'Semua';
-  const tahun = inputTahun.value ? parseInt(inputTahun.value, 10) : (new Date()).getFullYear();
-
-  // judul & sub
-  lapTitle.textContent = 'Laporan Pelanggaran Santri';
-  const kelasName = classId ? (classMap[classId]?.kelas || '-') : 'Semua';
-  const santriLabel = studentId ? selectSantri.options[selectSantri.selectedIndex].text : 'Semua';
-  const periodeLabel = (bulan === 'Semua') ? 'Semua Bulan' : new Date(2000, parseInt(bulan,10)-1, 1).toLocaleString('id-ID', { month: 'long' });
-  lapSubtitle.textContent = `Kelas: ${kelasName} | Santri: ${santriLabel} | Periode: ${periodeLabel} ${tahun}`;
-  lapMeta.textContent = '';
-
-  // query view v_violations_expanded
-  let query = supabase.from('v_violations_expanded')
-    .select(`
-      id,
-      student_id,
-      student_name,
-      class_id,
-      class_name,
-      violation,
-      date_at,
-      time_at,
-      notes
-    `)
-    .order('date_at', { ascending: true })
-    .order('time_at', { ascending: true });
-
-  if (classId) query = query.eq('class_id', classId);
-  if (studentId) query = query.eq('student_id', studentId);
-
-  // filter bulan/tahun
-  if (bulan !== 'Semua') {
-    // buat rentang awal-akhir bulan
-    const m = parseInt(bulan, 10) - 1;
-    const start = new Date(tahun, m, 1);
-    const end = new Date(tahun, m + 1, 1);
-    query = query.gte('date_at', start.toISOString().slice(0,10))
-                 .lt('date_at', end.toISOString().slice(0,10));
+function showAlert(msg, ok = false) {
+  // cari elemen alert bawaan jika ada, kalau tidak pakai alert()
+  const el = $('#alert') || $('#app-alert') || null;
+  if (el) {
+    el.className = `my-3 rounded p-3 ${ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => (el.style.display = 'none'), 4000);
   } else {
-    const startY = `${tahun}-01-01`, endY = `${tahun+1}-01-01`;
-    query = query.gte('date_at', startY).lt('date_at', endY);
+    alert(msg);
   }
-
-  const { data, error } = await query;
-  if (error) { showAlert(error.message, false); return; }
-
-  lastData = data || [];
-  lastClassMeta = classId ? (classMap[classId] || null) : null;
-
-  // render tabel
-  tbodyLaporan.innerHTML = lastData.map((row, idx) => {
-    const jam = row.time_at ? row.time_at.slice(0,8) : '';
-    const tgl = row.date_at || '';
-    return `
-      <tr>
-        <td class="p-2 border text-center">${idx+1}</td>
-        <td class="p-2 border">${row.student_name || ''}</td>
-        <td class="p-2 border">${row.class_name || ''}</td>
-        <td class="p-2 border">${row.violation || ''}</td>
-        <td class="p-2 border text-nowrap">${tgl}</td>
-        <td class="p-2 border text-nowrap">${jam}</td>
-        <td class="p-2 border">${row.notes || ''}</td>
-        <td class="p-2 border col-aksi" data-col="aksi">
-          <button class="btn-hapus" data-id="${row.id}">Hapus</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  showAlert(`Menampilkan ${lastData.length} data.`, true);
 }
-btnTampilkan?.addEventListener('click', tampilkanLaporan);
-btnCetak?.addEventListener('click', () => window.print());
 
-/////////////////////// HAPUS DATA ///////////////////////
-tbodyLaporan?.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.btn-hapus');
-  if (!btn) return;
-  const id = btn.getAttribute('data-id');
-  if (!id) return;
+// normalisasi nomor ke format international (IDN)
+function normalizePhone(p) {
+  if (!p) return '';
+  const digits = p.replace(/\D+/g, '');
+  if (digits.startsWith('62')) return digits;
+  if (digits.startsWith('0'))  return '62' + digits.slice(1);
+  return digits; // sudah internasional atau custom
+}
 
-  if (!confirm('Yakin hapus pelanggaran ini?')) return;
+// build teks ringkasan subjudul
+function buildSubtitle({ kelasName, studentName, periodeText }) {
+  const bagianKelas = kelasName ? `Kelas: ${kelasName}` : 'Kelas: Semua';
+  const bagianSantri = studentName ? ` | Santri: ${studentName}` : ' | Santri: Semua';
+  const bagianPeriode = ` | Periode: ${periodeText || 'Semua Bulan'}`;
+  return `${bagianKelas}${bagianSantri}${bagianPeriode}`;
+}
 
-  const { error } = await supabase.from('violations').delete().eq('id', id);
+// state terakhir untuk WA/PDF
+let lastViewData = [];          // array hasil query tampilan
+let lastClassMeta = null;       // { kelas, wali_name, wali_phone }
+
+/* ======= DOM refs (multi-id helper agar fleksibel) ======= */
+// Input per Kelas
+const selectKelasPerKelas = $('#kelas-per-kelas') || $('#selectKelasPerKelas') || $('#kelas1');
+const tbodyPerKelas       = $('#tbodyLaporan')    || $('#lap-body-kelas')      || $('#tbody-per-kelas');
+const btnSimpanKelas      = $('#btnSimpanKelas')  || $('#btnSimpanPelanggaran') || $('#btnSaveKelas');
+
+// Input per Santri
+const selectKelasPerSantri = $('#kelas-per-santri') || $('#selectKelasPerSantri') || $('#kelas2');
+const selectSantri         = $('#selectSantri')     || $('#santriDropdown')       || $('#santri2');
+const selectPelanggaranS   = $('#pelanggaranSantri')|| $('#pelanggaran2');
+const inputPelanggaranLainS= $('#pelanggaranSantriLain') || $('#pelanggaran2Lain');
+const inputJamS            = $('#jamSantri')        || $('#jam2');
+const inputTanggalS        = $('#tanggalSantri')    || $('#tanggal2');
+const inputNotesS          = $('#notesSantri')      || $('#notes2');
+const btnSimpanSantri      = $('#btnSimpanSantri')  || $('#btnSaveSantri');
+
+// Tampilkan & Cetak
+const selectKelasF   = $('#filterKelas')   || $('#kelas-tampil')  || $('#selectKelas');
+const selectSantriF  = $('#filterSantri')  || $('#santri-tampil') || $('#selectStudent');
+const selectBulanF   = $('#filterBulan')   || $('#bulan-tampil')  || $('#selectMonth');
+const selectTahunF   = $('#filterTahun')   || $('#tahun-tampil')  || $('#selectYear');
+const btnTampilkan   = $('#btnTampilkan')  || $('#btnShow');
+const btnCetak       = $('#btnCetak')      || $('#btnPrint');
+const btnPdfWa       = $('#btnPdfWa')      || $('#btnKirimWa') || $('#btnBuatPdfKirimWa');
+
+// area laporan (yang di-PDF)
+const lapWrap      = $('#lap-wrap');
+const lapTitle     = $('#lap-title');
+const lapSubtitle  = $('#lap-subtitle');
+const lapMeta      = $('#lap-meta');
+const lapTable     = $('#lap-table');
+const tbodyView    = $('#tbodyLaporanView') || $('#lap-table tbody') || $('#tbody-tampil');
+
+// “Aksi” (hapus) ada di HTML, tapi JANGAN ikut ke PDF.
+// beri class khusus pada header/kolom aksi supaya mudah di-hide saat clone:
+const COL_AKSI_HEADER_SEL = 'th[data-col="aksi"]';   // header aksi
+const COL_AKSI_CELLS_SEL  = 'td[data-col="aksi"]';   // cell aksi
+
+/* ============== LOAD OPTION KELAS (dipakai di semua tab) ============== */
+async function loadClassesOptions() {
+  const { data, error } = await supabase.from('classes').select('id, kelas, wali_name, wali_phone').order('kelas');
   if (error) { showAlert(error.message, false); return; }
 
-  // refresh tampilan
-  await tampilkanLaporan();
-  showAlert('Data telah dihapus.', true);
-});
-
-/////////////////////// BUAT PDF & KIRIM WA ///////////////////////
-btnPdfWa?.addEventListener('click', async () => {
-  try { await ensureHtml2Pdf(); }
-  catch (e) { showAlert(e.message || 'html2pdf belum dimuat', false); return; }
-
-  if (!lastData.length) {
-    showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
-    return;
+  // helper isi dropdown kelas
+  function fillKelasSelect(el) {
+    if (!el) return;
+    const opt = ['<option value="">-- pilih kelas --</option>']
+      .concat(data.map(c => `<option value="${c.id}" data-wali-name="${c.wali_name||''}" data-wali-phone="${c.wali_phone||''}">${c.kelas}</option>`));
+    el.innerHTML = opt.join('');
   }
 
-  // Sembunyikan kolom Aksi saat render PDF
-  const aksiTh = lapTable.querySelector('th.col-aksi, #col-aksi');
-  const aksiTds = $$('#lap-table td.col-aksi,[data-col="aksi"]');
-  const oldDisplayTh = aksiTh ? aksiTh.style.display : null;
-  const oldDisplaysTd = aksiTds.map(td => td.style.display);
+  fillKelasSelect(selectKelasPerKelas);
+  fillKelasSelect(selectKelasPerSantri);
 
-  if (aksiTh) aksiTh.style.display = 'none';
-  aksiTds.forEach(td => td.style.display = 'none');
+  if (selectKelasF) {
+    const all = ['<option value="">Semua Kelas</option>']
+      .concat(data.map(c => `<option value="${c.id}" data-wali-name="${c.wali_name||''}" data-wali-phone="${c.wali_phone||''}">${c.kelas}</option>`));
+    selectKelasF.innerHTML = all.join('');
+  }
+}
+await loadClassesOptions();
 
-  // Set judul/subtitle (jaga-jaga)
-  if (!lapTitle?.textContent?.trim()) lapTitle.textContent = 'Laporan Pelanggaran Santri';
-  if (!lapSubtitle?.textContent?.trim()) lapSubtitle.textContent = '';
+/* =================== INPUT PER KELAS =================== */
+async function loadStudentsTableByClass(classId) {
+  if (!classId || !tbodyPerKelas) return;
 
-  const opt = {
-    margin: 10,
-    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  };
+  // ambil meta wali untuk WA
+  const { data: meta } = await supabase.from('classes')
+    .select('kelas, wali_name, wali_phone').eq('id', classId).single();
+  lastClassMeta = meta || null;
 
-  try {
-    // cara benar ambil Blob di v0.10.x (hindari RangeError: too many function arguments)
-    const blob = await html2pdf()
-      .set(opt)
-      .from(lapWrap)
-      .toPdf()
-      .get('pdf')
-      .then(pdf => pdf.output('blob'));
+  const { data: students, error } = await supabase
+    .from('students').select('id, name, kelas, class_id')
+    .eq('class_id', classId).order('name');
 
-    // kembalikan kolom Aksi setelah render
-    if (aksiTh) aksiTh.style.display = oldDisplayTh ?? '';
-    aksiTds.forEach((td, i) => td.style.display = oldDisplaysTd[i] ?? '');
+  if (error) { showAlert(error.message, false); return; }
 
-    // upload ke API serverless → dapet publicUrl
-    let url = '';
-    const base64 = await blobToBase64(blob);
-    const res = await fetch('/api/upload-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: opt.filename, base64 })
+  tbodyPerKelas.innerHTML = students.map((s, i) => `
+    <tr data-student="${s.id}">
+      <td class="p-2 text-center">${i + 1}</td>
+      <td class="p-2">${s.name}</td>
+      <td class="p-2">
+        <select class="sel-viol form">
+          <option value="">-- pilih --</option>
+          <option>Terlambat</option>
+          <option>Atribut tidak lengkap</option>
+          <option>Tidak mengikuti pelajaran</option>
+          <option>Terlambat mengikuti pelajaran</option>
+          <option value="__LAINNYA__">Lainnya…</option>
+        </select>
+        <input class="inp-viol-lain sr-only form mt-1" placeholder="Isi pelanggaran lainnya" />
+      </td>
+      <td class="p-2"><input class="inp-jam  form" placeholder="hh:mm:ss" /></td>
+      <td class="p-2"><input class="inp-tgl  form" type="date" /></td>
+      <td class="p-2"><input class="inp-notes form" placeholder="Keterangan (opsional)" /></td>
+    </tr>
+  `).join('');
+
+  // toggle input 'lainnya'
+  tbodyPerKelas.querySelectorAll('select.sel-viol').forEach((sel) => {
+    sel.addEventListener('change', (e) => {
+      const td = e.currentTarget.closest('td');
+      const lain = td.querySelector('.inp-viol-lain');
+      if (e.currentTarget.value === '__LAINNYA__') {
+        lain.classList.remove('sr-only');
+        lain.focus();
+      } else {
+        lain.classList.add('sr-only');
+        lain.value = '';
+      }
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || 'Upload gagal');
-    url = json.publicUrl;
+  });
+}
 
-    showAlert('PDF berhasil dibuat.', true);
-
-    // rangkai pesan WA
-    const ringkasan = lapSubtitle?.textContent?.trim() || '';
-    let waTarget = '';
-    let waliName = '';
-    if (lastClassMeta?.wali_phone) {
-      waTarget = normalizePhone(lastClassMeta.wali_phone);
-      waliName = lastClassMeta.wali_name || '';
-    }
-
-    const text = [
-      `Assalamu'alaikum`,
-      waliName ? `${waliName},` : '',
-      `Berikut laporan pelanggaran santri (${ringkasan}).`,
-      `PDF: ${url}`
-    ].filter(Boolean).join(' ');
-
-    openWhatsApp(waTarget || '', text);
-  } catch (e) {
-    // kembalikan kolom Aksi jika belum
-    if (aksiTh) aksiTh.style.display = oldDisplayTh ?? '';
-    aksiTds.forEach((td, i) => td.style.display = oldDisplaysTd[i] ?? '');
-    showAlert(e.message || 'Gagal membuat/mengunggah PDF', false);
-  }
+selectKelasPerKelas?.addEventListener('change', (e) => {
+  loadStudentsTableByClass(e.target.value);
 });
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      const b64 = fr.result.split(',')[1];
-      resolve(b64);
-    };
-    fr.onerror = reject;
-    fr.readAsDataURL(blob);
-  });
-}
+btnSimpanKelas?.addEventListener('click', async () => {
+  if (!selectKelasPerKelas?.value) { showAlert('Pilih kelas dulu.', false); return; }
 
-/////////////////////// INPUT – PILIHAN PELANGGARAN ///////////////////////
-// Opsi global
-const VIOLATION_OPTIONS = [
-  'Terlambat',
-  'Atribut tidak lengkap',
-  'Tidak mengikuti pelajaran',
-  'Terlambat mengikuti pelajaran',
-  'Tidak memakai sepatu saat KBM',
-  'Lainnya'
-];
-
-// helper: buat <select> pelanggaran + input lainnya (auto show)
-function buildViolationSelect(nameForInput, placeholder = "isi jika memilih 'Lainnya'") {
-  const wrap = document.createElement('div');
-  wrap.className = 'flex gap-2 items-center';
-
-  const sel = document.createElement('select');
-  sel.className = 'border rounded px-2 py-1 w-full';
-  sel.innerHTML = [
-    `<option value="">-- pilih --</option>`,
-    ...VIOLATION_OPTIONS.map(v => `<option value="${v}">${v}</option>`)
-  ].join('');
-
-  const txt = document.createElement('input');
-  txt.type = 'text';
-  txt.placeholder = placeholder;
-  txt.className = 'border rounded px-2 py-1 flex-1';
-  txt.style.display = 'none';
-
-  sel.addEventListener('change', () => {
-    if (sel.value === 'Lainnya') {
-      txt.style.display = '';
-      txt.focus();
-    } else {
-      txt.style.display = 'none';
-      txt.value = '';
-    }
-  });
-
-  wrap.appendChild(sel);
-  wrap.appendChild(txt);
-  return { wrap, select: sel, input: txt };
-}
-
-/* ====== INPUT PER KELAS (KOLEKTIF) ======
-   Ekspektasi HTML:
-   - #kelasKolektif (select), #tbodyKolektif (tempat baris nama santri)
-   - tombol simpan kolektif: #btnSimpanKolektif
-*/
-const kelasKolektif = $('#kelasKolektif');
-const tbodyKolektif = $('#tbodyKolektif');
-const btnSimpanKolektif = $('#btnSimpanKolektif');
-
-async function loadKolektifRows() {
-  if (!kelasKolektif) return;
-  const cid = kelasKolektif.value;
-  tbodyKolektif.innerHTML = '';
-  if (!cid) return;
-
-  const { data, error } = await supabase.from('students')
-    .select('id, name')
-    .eq('class_id', cid).order('name');
-  if (error) { showAlert(error.message, false); return; }
-
-  tbodyKolektif.innerHTML = data.map(s => {
-    return `
-      <tr data-student="${s.id}">
-        <td class="p-2 border">${s.name}</td>
-        <td class="p-2 border v-slot"></td>
-        <td class="p-2 border"><input type="time" class="inp-jam border rounded px-2 py-1 w-full" value="07:00"></td>
-        <td class="p-2 border"><input type="date" class="inp-tgl border rounded px-2 py-1 w-full" value="${new Date().toISOString().slice(0,10)}"></td>
-        <td class="p-2 border"><input type="text" class="inp-notes border rounded px-2 py-1 w-full" placeholder="Keterangan"></td>
-      </tr>
-    `;
-  }).join('');
-
-  // sisipkan dropdown pelanggaran + input lainnya
-  $$('#tbodyKolektif .v-slot').forEach(cell => {
-    const { wrap } = buildViolationSelect('pelanggaran');
-    cell.appendChild(wrap);
-  });
-}
-
-kelasKolektif?.addEventListener('change', loadKolektifRows);
-
-btnSimpanKolektif?.addEventListener('click', async () => {
-  const cid = kelasKolektif.value;
-  if (!cid) { showAlert('Pilih kelas dulu.', false); return; }
-
-  const rows = $$('#tbodyKolektif tr');
+  const rows = Array.from(tbodyPerKelas?.querySelectorAll('tr') || []);
   const payload = [];
 
   rows.forEach(tr => {
     const student_id = tr.getAttribute('data-student');
-    const sel = tr.querySelector('select');
-    const txt = tr.querySelector('input[type="text"].border');
-    const jam = tr.querySelector('.inp-jam')?.value || '07:00';
-    const tgl = tr.querySelector('.inp-tgl')?.value || new Date().toISOString().slice(0,10);
-    const notes = tr.querySelector('.inp-notes')?.value || '';
+    const violSel  = tr.querySelector('.sel-viol');
+    const violLain = tr.querySelector('.inp-viol-lain');
+    const jam      = tr.querySelector('.inp-jam')?.value || '';
+    const tgl      = tr.querySelector('.inp-tgl')?.value || '';
+    const notes    = tr.querySelector('.inp-notes')?.value || '';
 
-    let violation = sel?.value || '';
-    if (violation === 'Lainnya') violation = txt?.value?.trim() || '';
+    let violation = violSel?.value || '';
+    if (violation === '__LAINNYA__') violation = violLain?.value?.trim() || '';
 
-    if (violation) {
-      payload.push({
-        class_id: cid,
-        student_id,
-        violation,
-        time_at: jam,
-        date_at: tgl,
-        notes
-      });
-    }
+    // baris kosong lewati
+    if (!student_id || !violation) return;
+
+    payload.push({
+      student_id,
+      class_id: selectKelasPerKelas.value,
+      violation,
+      time_at: jam || null,
+      date_at: tgl || null,
+      notes: notes || null,
+      input_at: new Date().toISOString()
+    });
   });
 
-  if (!payload.length) { showAlert('Tidak ada baris yang diisi.', false); return; }
+  if (!payload.length) { showAlert('Tidak ada baris berisi.', false); return; }
 
   const { error } = await supabase.from('violations').insert(payload);
   if (error) { showAlert(error.message, false); return; }
 
-  showAlert('Pelanggaran tersimpan.', true);
-  // opsional refresh tab tampil
+  showAlert('Data pelanggaran tersimpan.', true);
+  // optional: kosongkan input
+  rows.forEach(tr => {
+    tr.querySelector('.sel-viol').value = '';
+    tr.querySelector('.inp-viol-lain').classList.add('sr-only');
+    tr.querySelector('.inp-viol-lain').value = '';
+    tr.querySelector('.inp-jam').value = '';
+    tr.querySelector('.inp-tgl').value = '';
+    tr.querySelector('.inp-notes').value = '';
+  });
 });
 
-/* ====== INPUT PER SANTRI (TUNGGAL) ======
-   Ekspektasi HTML:
-   - #kelasTunggal (select), #santriTunggal (select)
-   - #violationWrapTunggal (div kosong untuk inject select+input)
-   - #jamTunggal (input time), #tglTunggal (input date), #notesTunggal (input text)
-   - #btnSimpanTunggal
-*/
-const kelasTunggal = $('#kelasTunggal');
-const santriTunggal = $('#santriTunggal');
-const violationWrapTunggal = $('#violationWrapTunggal');
-const jamTunggal = $('#jamTunggal');
-const tglTunggal = $('#tglTunggal');
-const notesTunggal = $('#notesTunggal');
-const btnSimpanTunggal = $('#btnSimpanTunggal');
+/* =================== INPUT PER SANTRI =================== */
+async function loadStudentsSelectByClass(classId) {
+  if (!classId || !selectSantri) return;
 
-let vSelTunggal = null;
+  // ambil meta wali untuk WA
+  const { data: meta } = await supabase.from('classes')
+    .select('kelas, wali_name, wali_phone').eq('id', classId).single();
+  lastClassMeta = meta || null;
 
-kelasTunggal?.addEventListener('change', async () => {
-  const cid = kelasTunggal.value;
-  if (!cid) {
-    santriTunggal.innerHTML = `<option value="">-- Pilih santri --</option>`;
-    return;
-  }
-  const { data, error } = await supabase.from('students').select('id,name').eq('class_id', cid).order('name');
+  const { data: students, error } = await supabase
+    .from('students').select('id, name, class_id')
+    .eq('class_id', classId).order('name');
+
   if (error) { showAlert(error.message, false); return; }
-  santriTunggal.innerHTML = [
-    `<option value="">-- Pilih santri --</option>`,
-    ...data.map(s => `<option value="${s.id}">${s.name}</option>`)
-  ].join('');
-});
 
-// inject dropdown + input lainnya
-if (violationWrapTunggal) {
-  const comp = buildViolationSelect('pelanggaran_tunggal');
-  violationWrapTunggal.appendChild(comp.wrap);
-  vSelTunggal = comp;
+  selectSantri.innerHTML =
+    `<option value="">-- Pilih santri --</option>` +
+    students.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 }
 
-btnSimpanTunggal?.addEventListener('click', async () => {
-  const cid = kelasTunggal.value;
-  const sid = santriTunggal.value;
-  if (!cid || !sid) { showAlert('Pilih kelas & santri dulu.', false); return; }
-
-  let violation = vSelTunggal?.select.value || '';
-  if (violation === 'Lainnya') {
-    violation = vSelTunggal?.input.value?.trim() || '';
-  }
-  const time_at = jamTunggal?.value || '07:00';
-  const date_at = tglTunggal?.value || new Date().toISOString().slice(0,10);
-  const notes = notesTunggal?.value || '';
-
-  if (!violation) { showAlert('Pelanggaran belum diisi.', false); return; }
-
-  const { error } = await supabase.from('violations').insert([{
-    class_id: cid, student_id: sid, violation, time_at, date_at, notes
-  }]);
-
-  if (error) { showAlert(error.message, false); return; }
-  showAlert('Pelanggaran tersimpan.', true);
+selectKelasPerSantri?.addEventListener('change', (e) => {
+  loadStudentsSelectByClass(e.target.value);
 });
 
-/////////////////////// INIT ///////////////////////
-(async function init() {
-  try {
-    await loadClasses();
-    // set default tahun
-    if (inputTahun && !inputTahun.value) {
-      inputTahun.value = (new Date()).getFullYear();
-    }
-    // jika di tab tampil – langsung load santri sesuai kelas terpilih (kalau ada value preset)
-    if (selectKelas && selectKelas.value) {
-      await loadStudentsByClass(selectKelas.value);
-    }
-    // kolektif rows (jika ada elemen)
-    if (kelasKolektif && kelasKolektif.value) {
-      await loadKolektifRows();
-    }
-  } catch (e) {
-    showAlert(e.message || 'Gagal inisialisasi', false);
+// toggle Lainnya (per-santri)
+selectPelanggaranS?.addEventListener('change', (e) => {
+  if (!inputPelanggaranLainS) return;
+  if (e.target.value === '__LAINNYA__') {
+    inputPelanggaranLainS.classList.remove('sr-only');
+    inputPelanggaranLainS.focus();
+  } else {
+    inputPelanggaranLainS.classList.add('sr-only');
+    inputPelanggaranLainS.value = '';
   }
-})();
+});
+
+btnSimpanSantri?.addEventListener('click', async () => {
+  if (!selectKelasPerSantri?.value) { showAlert('Pilih kelas dulu.', false); return; }
+  if (!selectSantri?.value)        { showAlert('Pilih santri dulu.', false); return; }
+
+  let violation = selectPelanggaranS?.value || '';
+  if (violation === '__LAINNYA__') {
+    violation = (inputPelanggaranLainS?.value || '').trim();
+  }
+  if (!violation) { showAlert('Isi pelanggaran.', false); return; }
+
+  const payload = {
+    student_id: selectSantri.value,
+    class_id: selectKelasPerSantri.value,
+    violation,
+    time_at: (inputJamS?.value || null),
+    date_at: (inputTanggalS?.value || null),
+    notes: (inputNotesS?.value || null),
+    input_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase.from('violations').insert(payload);
+  if (error) { showAlert(error.message, false); return; }
+  showAlert('Pelanggaran santri tersimpan.', true);
+
+  // reset ringan
+  if (selectPelanggaranS) selectPelanggaranS.value = '';
+  if (inputPelanggaranLainS) { inputPelanggaranLainS.value=''; inputPelanggaranLainS.classList.add('sr-only'); }
+  if (inputJamS) inputJamS.value = '';
+  if (inputTanggalS) inputTanggalS.value = '';
+  if (inputNotesS) inputNotesS.value = '';
+});
+
+/* =================== TAMPILKAN & CETAK =================== */
+function monthNumToRange(m) {
+  if (!m) return [1,12];
+  const n = +m; return [n,n];
+}
+
+async function queryViewData({ classId, studentId, month, year }) {
+  // view: v_violations_expanded (wajib punya kolom kelas)
+  let q = supabase.from('v_violations_expanded').select(`
+    id, student_id, student_name, class_id, class_name, violation, time_at, date_at, notes, input_at
+  `);
+
+  if (classId)  q = q.eq('class_id', classId);
+  if (studentId) q = q.eq('student_id', studentId);
+  if (year)      q = q.gte('date_at', `${year}-01-01`).lte('date_at', `${year}-12-31`);
+  if (month) {
+    const mm = String(month).padStart(2,'0');
+    if (year) q = q.gte('date_at', `${year}-${mm}-01`).lte('date_at', `${year}-${mm}-31`);
+  }
+  q = q.order('date_at', { ascending: true }).order('time_at', { ascending: true });
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+function fillViewTable(data) {
+  if (!tbodyView) return;
+  tbodyView.innerHTML = data.map((r, i) => `
+    <tr>
+      <td class="p-2 text-center">${i+1}</td>
+      <td class="p-2">${r.student_name || ''}</td>
+      <td class="p-2">${r.class_name || ''}</td>
+      <td class="p-2">${r.violation || ''}</td>
+      <td class="p-2">${r.date_at || ''}</td>
+      <td class="p-2">${r.time_at || ''}</td>
+      <td class="p-2">${r.notes || ''}</td>
+      <td class="p-2" data-col="aksi">
+        <button class="btn-hapus px-2 py-1 bg-rose-600 text-white rounded" data-id="${r.id}">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+
+  // pasang handler hapus
+  tbodyView.querySelectorAll('.btn-hapus').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      if (!confirm('Hapus data ini?')) return;
+      const { error } = await supabase.from('violations').delete().eq('id', id);
+      if (error) { showAlert(error.message, false); return; }
+      btn.closest('tr')?.remove();
+      showAlert('Data terhapus.', true);
+    });
+  });
+}
+
+btnTampilkan?.addEventListener('click', async () => {
+  try {
+    const classId = selectKelasF?.value || '';
+    const studentId = selectSantriF?.value || '';
+    const month = selectBulanF?.value || '';
+    const year  = selectTahunF?.value || '';
+
+    // ambil meta kelas (untuk subtitle + WA)
+    if (classId) {
+      const { data: meta } = await supabase.from('classes')
+        .select('kelas, wali_name, wali_phone').eq('id', classId).single();
+      lastClassMeta = meta || null;
+    } else {
+      lastClassMeta = null;
+    }
+
+    const data = await queryViewData({ classId, studentId, month, year });
+    lastViewData = data;
+
+    // HEADERS
+    if (lapTitle)    lapTitle.textContent = 'Laporan Pelanggaran Santri';
+    if (lapSubtitle) lapSubtitle.textContent = buildSubtitle({
+      kelasName: lastClassMeta?.kelas || '',
+      studentName: (selectSantriF && selectSantriF.value && selectSantriF.options[selectSantriF.selectedIndex]?.text) || '',
+      periodeText: (month ? `Bulan ${month}` : 'Semua Bulan')
+    });
+    if (lapMeta)     lapMeta.textContent = '';
+
+    fillViewTable(data);
+    showAlert(`Menampilkan ${data.length} data.`, true);
+  } catch (e) {
+    showAlert(e.message || 'Gagal menampilkan data', false);
+  }
+});
+
+btnCetak?.addEventListener('click', () => {
+  window.print();
+});
+
+/* =================== PDF + KIRIM WA =================== */
+async function ensureHtml2Pdf() {
+  if (window.html2pdf) return;
+  // html2pdf sudah kamu load via <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer>
+  // kalau masih belum ready, tunggu sejenak
+  await new Promise((r) => setTimeout(r, 300));
+  if (!window.html2pdf) throw new Error('html2pdf belum dimuat. Pastikan <script html2pdf> ada di <head>.');
+}
+
+function cloneForPdf() {
+  // clone lapWrap dan HILANGKAN kolom Aksi + ruang kosong atas
+  const node = lapWrap.cloneNode(true);
+  // hilangkan header aksi
+  node.querySelectorAll(COL_AKSI_HEADER_SEL).forEach(th => th.remove());
+  // hilangkan cell aksi
+  node.querySelectorAll(COL_AKSI_CELLS_SEL).forEach(td => td.remove());
+  // rapikan margin atas
+  node.style.marginTop = '0';
+  return node;
+}
+
+async function makePdfBlobFrom(node) {
+  const opt = {
+    margin: [10,10,10,10],                  // mm
+    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, windowWidth: document.documentElement.clientWidth },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  const blob = await html2pdf()
+    .set(opt)
+    .from(node)
+    .toPdf()
+    .get('pdf')
+    .then(pdf => pdf.output('blob'));
+
+  return { blob, filename: opt.filename };
+}
+
+async function uploadToApi({ filename, blob }) {
+  const buf = await blob.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const res = await fetch('/api/upload-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, base64 })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || 'Upload gagal (balasan bukan JSON).');
+  return json.publicUrl;
+}
+
+btnPdfWa?.addEventListener('click', async () => {
+  try {
+    await ensureHtml2Pdf();
+    if (!lastViewData.length) { showAlert('Tampilkan data dulu sebelum membuat PDF.', false); return; }
+
+    const node = cloneForPdf();
+    const { blob, filename } = await makePdfBlobFrom(node);
+    const publicUrl = await uploadToApi({ filename, blob });
+    showAlert('PDF berhasil dibuat & diunggah.', true);
+
+    // susun pesan WA
+    const ringkasan = lapSubtitle?.textContent?.trim() || '';
+    const waliName  = lastClassMeta?.wali_name || '';
+    const waliPhone = normalizePhone(lastClassMeta?.wali_phone || '');
+
+    const text = `Assalamu'alaikum ${waliName ? 'Bapak/Ibu '+waliName : ''}. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${publicUrl}`;
+    const waUrl = waliPhone
+      ? `https://api.whatsapp.com/send?phone=${encodeURIComponent(waliPhone)}&text=${encodeURIComponent(text)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+
+    window.open(waUrl, '_blank');
+  } catch (e) {
+    showAlert(e.message || 'Gagal membuat/mengirim PDF', false);
+  }
+});
+
+/* =================== INIT AWAL (optional) =================== */
+// Jika di halaman “Tampilkan & Cetak” kamu ingin defaultnya langsung tampil:
+// btnTampilkan?.click();
