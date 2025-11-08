@@ -234,15 +234,15 @@ tabSantri?.addEventListener('click', () => {
   if (tanggalSantri && !tanggalSantri.value)
     tanggalSantri.value = todayStr(); // default tanggal hari ini
 });
-tabLap?.addEventListener('click', async () => {
-  showPanel('lap');
-  try {
-    await loadFilterKelas();
-    await loadFilterSantriByClass(filterKelas?.value || '');
-  } catch (e) {
-    showAlert(e.message || 'Gagal menyiapkan filter laporan', false);
-  }
-});
+// tabLap?.addEventListener('click', async () => {
+//   showPanel('lap');
+//   try {
+//     await loadFilterKelas();
+//     await loadFilterSantriByClass(filterKelas?.value || '');
+//   } catch (e) {
+//     showAlert(e.message || 'Gagal menyiapkan filter laporan', false);
+//   }
+// });
 
 // ======================= EVENT LISTENERS UTAMA =======================
 // Per-kelas
@@ -787,11 +787,19 @@ btnTampilkan?.addEventListener('click', async () => {
 });
 
 /******************** REAKSI PERUBAHAN KELAS (isi dropdown santri) ********************/
+// filterKelas?.addEventListener('change', async () => {
+//   syncWaliFromFilter();
+//   updatePdfButtonsState();
+//   await loadFilterSantriByClass(filterKelas.value || '');
+// });
 filterKelas?.addEventListener('change', async () => {
   syncWaliFromFilter();
   updatePdfButtonsState();
   await loadFilterSantriByClass(filterKelas.value || '');
+  await queryLaporan();           // <— opsional auto refresh
+  renderLaporanTable();           // <— opsional auto refresh
 });
+
 
 /******************** INIT PANEL LAPORAN SAAT TAB DIBUKA ********************/
 tabLap?.addEventListener('click', async () => {
@@ -814,5 +822,6 @@ filterTahun?.addEventListener('change', async () => {
   await queryLaporan();
   renderLaporanTable();
 });
+
 
 
