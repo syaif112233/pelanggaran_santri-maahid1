@@ -550,11 +550,11 @@ async function queryLaporan() {
     const start = `${yearNum}-${mm}-01`;
     const end   = `${y2}-${mm2}-01`;
 
-    **console.log('[FILTER BULAN]', { yearNum, bulanNum, start, end });**
+    console.log('[FILTER BULAN]', { yearNum, bulanNum, start, end });
 
     q = q.gte('date_at', start).lt('date_at', end);
   } else if (yearNum) {
-    **console.log('[FILTER TAHUN]', { yearNum, span: 'full-year' });**
+    console.log('[FILTER TAHUN]', { yearNum, span: 'full-year' });
     q = q.gte('date_at', `${yearNum}-01-01`).lte('date_at', `${yearNum}-12-31`);
   }
 
