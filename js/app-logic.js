@@ -390,7 +390,6 @@ function blobToBase64(blob) {
   })
 }
 
-
 /* ===== handler PDF + WA: buka langsung nomor wali kelas ===== */
 btnPdfWa.addEventListener('click', async () => {
   try { await ensureHtml2Pdf() } 
@@ -435,27 +434,55 @@ const base64 = await blobToBase64(blob)
     return
   }
 
-  // siapkan nomor & pesan WA langsung ke wali kelas (bukan share generic)
-  let waTarget = ''
-  let waliName = ''
-  if (lastClassMeta?.wali_phone) {
-    waTarget = normalizePhone(lastClassMeta.wali_phone)
-    waliName = lastClassMeta.wali_name || ''
-  }
+  // --- setelah dapat `url` (publicUrl PDF) ---
+const classId = lapKelas.value;
 
-  const ringkasan = lapSubtitle?.textContent?.trim() || ''
-  const salam = waliName ? `Bapak/Ibu ${waliName}` : 'Bapak/Ibu Wali Kelas'
-  const text = encodeURIComponent(
-    `Assalamu'alaikum, ${salam}. Berikut laporan pelanggaran santri (${ringkasan}).\nPDF: ${url}`
-  )
-
-  if (waTarget) {
-    // langsung chat ke nomor wali kelas
-    window.open(`https://wa.me/${waTarget}?text=${text}`, '_blank')
-  } else {
-    // fallback: share generic kalau tidak ada nomor wali
-    window.open(`https://wa.me/?text=${text}`, '_blank')
+// ambil wali kelas (nama & phone) dari tabel classes
+let waliPhone = "", waliName = "", kelasName = "";
+{
+  const { data: cdata, error: cerr } = await supabase
+    .from("classes")
+    .select("kelas, wali_phone, wali_name")
+    .eq("id", classId)
+    .maybeSingle();
+  if (!cerr && cdata) {
+    kelasName = cdata.kelas || "";
+    waliPhone = (cdata.wali_phone || "").replace(/[^0-9]/g, "");
+    if (waliPhone.startsWith("0")) waliPhone = "62" + waliPhone.slice(1);
+    if (!waliPhone.startsWith("62")) waliPhone = "62" + waliPhone;
+    waliName = cdata.wali_name || "";
   }
+}
+
+// ringkasan laporan
+const ringkasan = lapSubtitle?.textContent?.trim() || "";
+
+// pesan WhatsApp
+const plainText =
+  `Assalamu'alaikum ${waliName ? 'Bapak/Ibu ' + waliName : ''}.\n` +
+  `Berikut laporan pelanggaran santri (${ringkasan}).\n` +
+  `PDF: ${url}\n` +
+  `Terima kasih.`;
+
+const encoded = encodeURIComponent(plainText);
+
+function openWhatsAppTo(phone, text) {
+  const appUrl = `whatsapp://send?phone=${phone}&text=${text}`;
+  const webUrl = `https://web.whatsapp.com/send?phone=${phone}&text=${text}`;
+
+  const win = window.open(appUrl, "_self");
+  setTimeout(() => {
+    try { window.open(webUrl, "_blank"); } catch (_) {}
+  }, 1200);
+}
+
+// buka WA wali
+if (waliPhone && /^\d{7,15}$/.test(waliPhone)) {
+  openWhatsAppTo(waliPhone, encoded);
+} else {
+  window.open(`https://web.whatsapp.com/?text=${encoded}`, "_blank");
+}
+
 
   showAlert('PDF berhasil dibuat & membuka WhatsApp.')
 })
