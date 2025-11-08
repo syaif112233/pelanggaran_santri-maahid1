@@ -4,51 +4,32 @@
   <meta charset="UTF-8" />
   <title>Sistem Pelanggaran Santri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- jsPDF + AutoTable (dipakai kalau mau opsi cetak PDF alternatif) -->
+  <!-- jsPDF (opsional, bila ingin alternatif cetak via AutoTable) -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
   <!-- html2pdf (untuk generate PDF di browser) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 
   <style>
-    /* Print A4 landscape */
+    /* ==== Print A4 landscape & anti terpotong ==== */
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
-      body * { visibility: hidden !important; }
-      #lap-wrap, #lap-wrap * { visibility: visible !important; }
-      #lap-wrap { position: absolute; inset: 0; padding: 0; }
       #lap-table thead { display: table-header-group; }
       #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
     }
-    th[data-sort] { cursor:pointer; user-select:none; }
-    .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
-    .hidden-input { display:none; }
 
-    /* === PDF friendly === */
-:root{ --pdf-width: 1040px; }             /* pas untuk A4 landscape - 10mm margin */
+    /* Saat render PDF via html2pdf, body akan diberi class .pdf-mode oleh JS */
+    .pdf-mode #lap-wrap { margin: 0 !important; }
+    .pdf-mode .col-aksi { display: none !important; } /* kolom aksi disembunyikan di PDF */
 
-#lap-wrap{ width: var(--pdf-width); margin:0 auto; }
-/* pastikan tak ada padding kontainer saat render PDF */
-.pdf-mode .mx-auto, 
-.pdf-mode .container { padding:0 !important; margin:0 !important; }
-
-/* thead muncul tiap halaman, baris tidak patah di tengah */
-@media print{
-  #lap-table { table-layout: fixed; border-collapse: collapse; }
-  #lap-table thead { display: table-header-group; }
-  #lap-table tfoot { display: table-footer-group; }
-  #lap-table tr { break-inside: avoid; page-break-inside: avoid; }
-  @page { margin: 10mm; }                 /* hilangkan “ruang kosong” atas */
-}
-
-/* kolom aksi DISEMBUNYIKAN saat render PDF */
-.pdf-mode .col-aksi{ display:none !important; }
-    .col-aksi { white-space: nowrap; width: 72px; }
-
-
+    th[data-sort] { cursor: pointer; user-select: none; }
+    .sort-ico { font-size: .9em; opacity: .7; margin-left: 6px; }
+    .hidden-input { display: none; }
   </style>
 </head>
 
@@ -58,8 +39,8 @@
 
     <!-- Tabs -->
     <div class="flex gap-4 border-b mb-6">
-      <button id="tab-kelas" class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
-      <button id="tab-santri" class="py-2 text-gray-600">Input per Santri</button>
+      <button id="tab-kelas"   class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
+      <button id="tab-santri"  class="py-2 text-gray-600">Input per Santri</button>
       <button id="tab-laporan" class="py-2 text-gray-600">Tampilkan & Cetak</button>
     </div>
 
@@ -69,7 +50,8 @@
     <!-- ================== PANEL: INPUT PER KELAS ================== -->
     <section id="panel-kelas">
       <label class="block font-semibold mb-2">Pilih Kelas</label>
-      <select id="selectKelas" class="w-full max-w-sm border rounded px-3 py-2 mb-4"></select>
+      <!-- ID KHUSUS PER-KELAS -->
+      <select id="kelas-per-kelas" class="w-full max-w-sm border rounded px-3 py-2 mb-4"></select>
 
       <div class="overflow-x-auto">
         <table class="w-full bg-white border">
@@ -82,7 +64,7 @@
               <th class="p-2 border">Keterangan</th>
             </tr>
           </thead>
-          <tbody id="tbodyKelas"></tbody>
+          <tbody id="tbodyPerKelas"></tbody>
         </table>
       </div>
 
@@ -96,11 +78,12 @@
       <div class="grid md:grid-cols-2 gap-4">
         <div>
           <label class="block font-semibold mb-1">Pilih Kelas</label>
-          <select id="sanKelas" class="w-full border rounded px-3 py-2"></select>
+          <!-- ID KHUSUS PER-SANTRI -->
+          <select id="kelas-per-santri" class="w-full border rounded px-3 py-2"></select>
         </div>
         <div>
           <label class="block font-semibold mb-1">Pilih Santri</label>
-          <select id="sanSantri" class="w-full border rounded px-3 py-2">
+          <select id="selectSantri" class="w-full border rounded px-3 py-2">
             <option value="">-- Pilih santri --</option>
           </select>
         </div>
@@ -109,30 +92,37 @@
       <div class="grid md:grid-cols-2 gap-4 mt-4">
         <div>
           <label class="block font-semibold mb-1">Pelanggaran</label>
-          <!-- dropdown + input "lainnya" yang muncul kondisional -->
           <div class="flex gap-2">
-            <select id="sanViolSel" class="w-1/2 border rounded px-3 py-2"></select>
-            <input id="sanViolCustom" class="w-1/2 border rounded px-3 py-2 hidden-input" placeholder="Isi detail jika pilih 'Lainnya'">
+            <!-- dropdown + input "lainnya" kondisional -->
+            <select id="pelanggaranSantri" class="w-1/2 border rounded px-3 py-2">
+              <option value="">-- pilih --</option>
+              <option value="Terlambat">Terlambat</option>
+              <option value="Atribut tidak lengkap">Atribut tidak lengkap</option>
+              <option value="Tidak mengikuti pelajaran">Tidak mengikuti pelajaran</option>
+              <option value="Terlambat mengikuti pelajaran">Terlambat mengikuti pelajaran</option>
+              <option value="__LAINNYA__">Lainnya…</option>
+            </select>
+            <input id="pelanggaranSantriLain" class="w-1/2 border rounded px-3 py-2 hidden-input" placeholder="Isi detail jika pilih 'Lainnya'">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block font-semibold mb-1">Jam</label>
-            <input id="sanJam" type="time" class="w-full border rounded px-3 py-2" />
+            <input id="jamSantri" type="time" class="w-full border rounded px-3 py-2" />
           </div>
           <div>
             <label class="block font-semibold mb-1">Tanggal</label>
-            <input id="sanTanggal" type="date" class="w-full border rounded px-3 py-2" />
+            <input id="tanggalSantri" type="date" class="w-full border rounded px-3 py-2" />
           </div>
         </div>
       </div>
 
       <div class="mt-4">
         <label class="block font-semibold mb-1">Keterangan</label>
-        <textarea id="sanKet" rows="3" class="w-full border rounded px-3 py-2"></textarea>
+        <textarea id="notesSantri" rows="3" class="w-full border rounded px-3 py-2"></textarea>
       </div>
 
-      <button id="sanSimpan" class="mt-5 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+      <button id="btnSimpanSantri" class="mt-5 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
         Simpan Pelanggaran
       </button>
     </section>
@@ -142,17 +132,18 @@
       <div class="grid md:grid-cols-4 gap-3 mb-4">
         <div>
           <label class="block font-semibold mb-1">Kelas</label>
-          <select id="lapKelas" class="w-full border rounded px-3 py-2"></select>
+          <!-- ID FILTER LAPORAN (BERBEDA DARI PER-KELAS) -->
+          <select id="filterKelas" class="w-full border rounded px-3 py-2"></select>
         </div>
         <div>
           <label class="block font-semibold mb-1">Santri (opsional)</label>
-          <select id="lapSantri" class="w-full border rounded px-3 py-2">
+          <select id="filterSantri" class="w-full border rounded px-3 py-2">
             <option value="">Semua Santri</option>
           </select>
         </div>
         <div>
           <label class="block font-semibold mb-1">Bulan</label>
-          <select id="lapBulan" class="w-full border rounded px-3 py-2">
+          <select id="filterBulan" class="w-full border rounded px-3 py-2">
             <option value="">Semua</option>
             <option value="01">Januari</option><option value="02">Februari</option>
             <option value="03">Maret</option><option value="04">April</option>
@@ -164,7 +155,7 @@
         </div>
         <div>
           <label class="block font-semibold mb-1">Tahun</label>
-          <input id="lapTahun" type="number" class="w-full border rounded px-3 py-2" placeholder="2025" />
+          <input id="filterTahun" type="number" class="w-full border rounded px-3 py-2" placeholder="2025" />
         </div>
       </div>
 
@@ -174,44 +165,47 @@
         <button id="btnPdfWa" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Buat PDF & Kirim WA</button>
       </div>
 
-      <!-- area yang diprint / di-PDF -->
-      <table id="lap-table" class="w-full bg-white border">
-  <thead class="bg-gray-100">
-    <tr>
-      <th class="p-2 border">No</th>
-      <th class="p-2 border" data-sort="student_name">
-        Nama Santri <span class="sort-ico" id="ico-student_name"></span>
-      </th>
-      <th class="p-2 border" data-sort="kelas">
-        Kelas <span class="sort-ico" id="ico-kelas"></span>
-      </th>
-      <th class="p-2 border" data-sort="violation">
-        Pelanggaran <span class="sort-ico" id="ico-violation"></span>
-      </th>
-      <th class="p-2 border" data-sort="date_at">
-        Tanggal <span class="sort-ico" id="ico-date_at"></span>
-      </th>
-      <th class="p-2 border" data-sort="time_at">
-        Jam <span class="sort-ico" id="ico-time_at"></span>
-      </th>
-      <th class="p-2 border" data-sort="notes">
-        Keterangan <span class="sort-ico" id="ico-notes"></span>
-      </th>
-      <!-- Kolom AKSI hanya TH di header, tanpa tombol -->
-      <th class="p-2 border col-aksi" data-col="aksi" id="col-aksi">Aksi</th>
-    </tr>
-  </thead>
+      <!-- ===== Area khusus yang diprint/di-PDF ===== -->
+      <div id="lap-wrap" class="overflow-x-auto mt-4 bg-white rounded">
+        <h3 id="lap-title" class="text-xl font-semibold text-center pt-6">Laporan Pelanggaran Santri</h3>
+        <div id="lap-subtitle" class="text-sm text-gray-600 text-center mt-1"></div>
+        <div id="lap-meta" class="text-xs text-gray-500 text-center mb-4"></div>
 
-  <tbody id="tbodyLaporan"></tbody>
-</table>
-
+        <table id="lap-table" class="w-full bg-white border">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="p-2 border">No</th>
+              <th class="p-2 border" data-sort="student_name">
+                Nama Santri <span class="sort-ico" id="ico-student_name"></span>
+              </th>
+              <th class="p-2 border" data-sort="kelas">
+                Kelas <span class="sort-ico" id="ico-kelas"></span>
+              </th>
+              <th class="p-2 border" data-sort="violation">
+                Pelanggaran <span class="sort-ico" id="ico-violation"></span>
+              </th>
+              <th class="p-2 border" data-sort="date_at">
+                Tanggal <span class="sort-ico" id="ico-date_at"></span>
+              </th>
+              <th class="p-2 border" data-sort="time_at">
+                Jam <span class="sort-ico" id="ico-time_at"></span>
+              </th>
+              <th class="p-2 border" data-sort="notes">
+                Keterangan <span class="sort-ico" id="ico-notes"></span>
+              </th>
+              <!-- Kolom AKSI hadir di view, disembunyikan saat PDF -->
+              <th class="p-2 border col-aksi" data-col="aksi" id="col-aksi">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyLaporanView"></tbody>
+        </table>
       </div>
+      <!-- ===== /lap-wrap ===== -->
     </section>
   </div>
 
-  <!-- Module scripts -->
+  <!-- Script modules (URUTAN PENTING) -->
   <script type="module" src="./js/supabaseClient.js"></script>
-<script type="module" src="./js/app-logic.js"></script>
-
+  <script type="module" src="./js/app-logic.js"></script>
 </body>
 </html>
