@@ -334,39 +334,45 @@ let lastLaporan = [];           // cache hasil query tampilkan
 let lastClassMeta = null;       // cache info kelas terpilih (wali)
 
 /******************** POPULATE FILTER LAPORAN ********************/
+/******************** POPULATE FILTER LAPORAN ********************/
 function updatePdfButtonsState() {
-  const isAll = !filterKelas?.value; // "" berarti 'Semua Kelas'
+  const isAll = !filterKelas || filterKelas.value === ''; // "" = 'Semua Kelas'
   [btnPdfWa, btnCetak].forEach(btn => {
     if (!btn) return;
     btn.disabled = isAll;
     btn.classList.toggle('opacity-50', isAll);
     btn.classList.toggle('cursor-not-allowed', isAll);
-async function loadFilterKelas() {
-  // pakai list kelas yang sudah dimuat oleh loadKelasSemua() sebelumnya
-  // isi "Semua Kelas" di paling atas
-  if (filterKelas) {
-    filterKelas.innerHTML = '';
-    const optAll = new Option('Semua Kelas', '');
-    filterKelas.add(optAll);
-
-    const { data, error } = await supabase.from('classes')
-      .select('id, kelas, wali_name, wali_phone')
-      .order('kelas', { ascending: true });
-    if (error) throw error;
-
-    data.forEach(r => {
-      const o = new Option(r.kelas, r.id);
-      o.dataset.wali_name  = r.wali_name || '';
-      o.dataset.wali_phone = r.wali_phone || '';
-      filterKelas.add(o);
-      updatePdfButtonsState();
-
   });
 }
 
-    });
-  }
+async function loadFilterKelas() {
+  if (!filterKelas) return;
+
+  // reset & tambah "Semua Kelas"
+  filterKelas.innerHTML = '';
+  filterKelas.add(new Option('Semua Kelas', ''));
+
+  // ambil daftar kelas
+  const { data, error } = await supabase
+    .from('classes')
+    .select('id, kelas, wali_name, wali_phone')
+    .order('kelas', { ascending: true });
+
+  if (error) throw error;
+
+  // isi options kelas
+  (data || []).forEach(r => {
+    const o = new Option(r.kelas, r.id);
+    o.dataset.wali_name  = r.wali_name  || '';
+    o.dataset.wali_phone = r.wali_phone || '';
+    filterKelas.add(o);
+  });
+
+  // setelah options terisi, sinkron meta & state tombol
+  syncWaliFromFilter();
+  updatePdfButtonsState();
 }
+
 
 async function loadFilterSantriByClass(classId) {
   if (!filterSantri) return;
