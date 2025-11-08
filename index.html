@@ -8,11 +8,9 @@
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- jsPDF + AutoTable (tanpa html2canvas) -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <!-- html2pdf (untuk generate PDF di browser) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
 
 
   <style>
@@ -21,6 +19,11 @@
       @page { size: A4 landscape; margin: 10mm; }
       body * { visibility: hidden !important; }
       #lap-wrap, #lap-wrap * { visibility: visible !important; }
+      #lap-wrap {
+    width: 1122px;           /* ≈ A4 landscape di 96dpi */
+    margin: 0 auto;
+    background: #fff;
+  }
       #lap-wrap { position: absolute; inset: 0; padding: 0; }
       #lap-table thead { display: table-header-group; }
       #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
