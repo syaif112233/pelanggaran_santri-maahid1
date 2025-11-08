@@ -15,6 +15,32 @@ const supabase = await getSupabase();
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+// ====== Loading helpers ======
+const _loadingEl   = document.getElementById('loading');
+const _loadingT    = document.getElementById('loading-title');
+const _loadingSub  = document.getElementById('loading-sub');
+
+function showLoading(title = 'Memproses…', sub = 'Mohon tunggu sebentar') {
+  if (_loadingEl) {
+    if (_loadingT)   _loadingT.textContent  = title;
+    if (_loadingSub) _loadingSub.textContent = sub;
+    _loadingEl.classList.remove('hidden');
+  }
+}
+
+function hideLoading() {
+  _loadingEl?.classList.add('hidden');
+}
+
+// optional: cegah dobel klik
+function setBusy(btn, busy = true) {
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.classList.toggle('opacity-50', busy);
+  btn.classList.toggle('cursor-not-allowed', busy);
+}
+
+
 function showAlert(msg, ok=true) {
   const box = $('#alert');
   if (!box) return;
@@ -472,37 +498,45 @@ function blobToBase64(blob){
 
 
 btnPdfWa?.addEventListener('click', async () => {
+  setBusy(btnPdfWa, true);
+  showLoading('Menyiapkan PDF', 'Merender tabel laporan…');
+
   try {
     await ensureHtml2Pdf();
-  } catch (e) {
-    showAlert(e.message || 'html2pdf belum dimuat', false);
-    return;
-  }
-  if (!lastLaporan.length) {
-    showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
-    return;
-  }
 
-  // sembunyikan kolom aksi saat ambil PDF
-  document.body.classList.add('pdf-mode');
+    if (!lastLaporan.length) {
+      hideLoading(); setBusy(btnPdfWa, false);
+      return showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
+    }
 
-  const opt = {
-    margin: 10,
-    filename: `laporan-pelanggaran-${Date.now()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  };
+    document.body.classList.add('pdf-mode'); // sembunyikan kolom Aksi saat render
 
-  const sourceEl = getLapContainerForPdf();
+    const opt = {
+      margin: 10,
+      filename: `laporan-pelanggaran-${Date.now()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
 
-  try {
-    const blob = await html2pdf().set(opt).from(sourceEl).toPdf().get('pdf').then(pdf => pdf.output('blob'));
-    // kembali tampilkan kolom aksi di UI
-    document.body.classList.remove('pdf-mode');  // tampilkan lagi kolom Aksi
+    const sourceEl = getLapContainerForPdf();
 
-    const base64 = await blobToBase64(blob);
-    
+    // Render PDF
+    showLoading('Membuat PDF', 'Mohon tunggu…');
+    const blob = await html2pdf()
+      .set(opt)
+      .from(sourceEl)
+      .toPdf()
+      .get('pdf')
+      .then(pdf => pdf.output('blob'));
+
+    document.body.classList.remove('pdf-mode');
+
+    // Upload
+    showLoading('Mengunggah laporan', 'Mengirim file ke server…');
+    const buffer = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -510,32 +544,38 @@ btnPdfWa?.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json?.error || 'Upload gagal');
-    
+
     const url = json.publicUrl;
     showAlert('PDF berhasil dibuat & diupload.', true);
 
-    // siapkan nomor wali + pesan
+    // Siapkan pesan WA
     syncWaliFromFilter();
     const phone = normalizePhone(lastClassMeta?.wali_phone || '');
     const waliName = lastClassMeta?.wali_name ? `Bapak/Ibu ${lastClassMeta.wali_name}` : 'Wali Kelas';
 
     const ringkasan = lapSubtitle?.textContent?.trim()
-                      || `Kelas: ${filterKelas?.selectedOptions?.[0]?.text || 'Semua Kelas'} | Periode: ${(filterBulan?.selectedOptions?.[0]?.text || 'Semua')} ${(filterTahun?.value || '')}`;
+      || `Kelas: ${filterKelas?.selectedOptions?.[0]?.text || 'Semua Kelas'} | Periode: ${(filterBulan?.selectedOptions?.[0]?.text || 'Semua')} ${(filterTahun?.value || '')}`;
+
     const text = encodeURIComponent(
       `Assalamu'alaikum ${waliName}. Berikut laporan pelanggaran santri (${ringkasan}).\nPDF: ${url}`
     );
 
-    // gunakan api.whatsapp.com agar compose langsung terisi
     const waUrl = phone
       ? `https://api.whatsapp.com/send?phone=${phone}&text=${text}`
       : `https://api.whatsapp.com/send?text=${text}`;
 
+    // Buka WA
+    showLoading('Membuka WhatsApp', 'Menyiapkan pesan…');
     window.open(waUrl, '_blank');
+
   } catch (e) {
-    document.body.classList.remove('pdf-mode');
     showAlert(e.message || 'Gagal membuat/mengunggah PDF', false);
+  } finally {
+    hideLoading();
+    setBusy(btnPdfWa, false);
   }
 });
+
 
 /******************** TAMPILKAN (klik) ********************/
 btnTampilkan?.addEventListener('click', async () => {
