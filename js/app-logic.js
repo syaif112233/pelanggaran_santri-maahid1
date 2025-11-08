@@ -433,13 +433,6 @@ async function ensureHtml2Pdf() {
   throw new Error('html2pdf belum termuat');
 }
 
-function normalizePhone(p) {
-  if (!p) return '';
-  let s = p.replace(/[^0-9]/g, '');
-  if (s.startsWith('0')) s = '62' + s.slice(1);
-  return s;
-}
-
 btnPdfWa?.addEventListener('click', async () => {
   try {
     await ensureHtml2Pdf();
@@ -527,7 +520,7 @@ filterKelas?.addEventListener('change', async () => {
 
 /******************** INIT PANEL LAPORAN SAAT TAB DIBUKA ********************/
 tabLap?.addEventListener('click', async () => {
-  showPanel?.('laporan');
+  showPanel?.('lap');
   try {
     await loadFilterKelas();
     await loadFilterSantriByClass(filterKelas?.value || '');
