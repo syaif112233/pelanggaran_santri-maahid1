@@ -395,6 +395,18 @@ btnKirimWa.addEventListener('click', async () => {
   }
 })
 
+  async function ensureHtml2Pdf(){
+  if (window.html2pdf) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Gagal load html2pdf'));
+    document.head.appendChild(s);
+  });
+}
+
+
 /* ================= init ================= */
 ;(async function init() {
   // preset dropdown pelanggaran (panel santri)
