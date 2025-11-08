@@ -35,6 +35,20 @@
     .sort-ico { font-size: .9em; opacity: .7; margin-left: 6px; }
     .hidden-input { display: none; }
   </style>
+  <!-- PATCH PDF MODE (tambahkan sebelum </head>) -->
+  <style>
+    .pdf-mode, .pdf-mode * {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      background: #fff !important;
+      mix-blend-mode: normal !important;
+      filter: none !important;
+    }
+    html.pdf-mode { color-scheme: light; }
+    .pdf-mode .col-aksi { display: none !important; }
+    .pdf-mode table, .pdf-mode th, .pdf-mode td { border-color: #e5e7eb !important; }
+  </style>
+
 </head>
 
 <body class="bg-gray-50">
