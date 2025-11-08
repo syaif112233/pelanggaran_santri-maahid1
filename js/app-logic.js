@@ -517,20 +517,41 @@ async function generatePdfBlob(sourceEl, opt) {
   return blob;
 }
 
-function arrayBufferToBase64(buffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+//function arrayBufferToBase64(buffer) {
+//  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+//}
+
+//async function uploadReport(filename, base64) {
+// const res = await fetch('/api/upload-report', {
+//    method: 'POST',
+//    headers: { 'Content-Type': 'application/json' },
+//    body: JSON.stringify({ filename, base64 })
+//  });
+//  const json = await res.json();
+//  if (!res.ok) throw new Error(json?.error || 'Upload gagal');
+//  return json.publicUrl;
+//}
+
+// GANTI fungsi upload lama (yang fetch ke /api) dengan ini
+async function uploadReportDirect(blob, filename) {
+  const folder = new Date().getFullYear().toString();
+  const path = `${folder}/${Date.now()}_${filename}`;
+
+  const { error: upErr } = await supabase
+    .storage
+    .from('reports')
+    .upload(path, blob, { contentType: 'application/pdf', upsert: true });
+
+  if (upErr) throw upErr;
+
+  const { data: pub } = supabase
+    .storage
+    .from('reports')
+    .getPublicUrl(path);
+
+  return pub.publicUrl; // <- ini yang dipakai buat WA
 }
 
-async function uploadReport(filename, base64) {
-  const res = await fetch('/api/upload-report', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename, base64 })
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error || 'Upload gagal');
-  return json.publicUrl;
-}
 
 function openWaWithReport(publicUrl) {
   // Ambil meta wali dari filter (kamu sudah punya syncWaliFromFilter)
@@ -597,10 +618,14 @@ btnPdfWa?.addEventListener('click', async () => {
 
     // 2) upload
     showLoading('Mengunggah laporan', 'Mengirim file ke server…');
-    //const base64 = arrayBufferToBase64(await blob.arrayBuffer());
-    const base64 = await blobToBase64(blob);
+    
+    // SEBELUM:
+    // const base64 = await blobToBase64(blob);
+    // const publicUrl = await uploadReport(opt.filename, base64);
+    
+    // SESUDAH:
+    const publicUrl = await uploadReportDirect(blob, opt.filename);
 
-    const publicUrl = await uploadReport(opt.filename, base64);
 
     // 3) buka WA
     showLoading('Membuka WhatsApp', 'Menyiapkan pesan…');
