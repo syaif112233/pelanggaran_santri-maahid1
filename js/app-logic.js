@@ -29,45 +29,45 @@ function showAlert(msg, ok=true) {
   setTimeout(()=>box.classList.add('hidden'), 3000);
 }
 
-// ======================= REF ELEMEN SESUAI HTML BARU =======================
-// Tabs
-const tabKelas   = $('#tab-kelas');
-const tabSantri  = $('#tab-santri');
-const tabLap     = $('#tab-laporan');
+// ===== REF ELEMEN (pakai fallback agar cocok dengan HTML lama/baru) =====
+const tabKelas   = document.querySelector('#tab-kelas');
+const tabSantri  = document.querySelector('#tab-santri');
+const tabLap     = document.querySelector('#tab-laporan');
 
-const panelKelas = $('#panel-kelas');
-const panelSantri= $('#panel-santri');
-const panelLap   = $('#panel-laporan');
+const panelKelas = document.querySelector('#panel-kelas');
+const panelSantri= document.querySelector('#panel-santri');
+const panelLap   = document.querySelector('#panel-laporan');
 
 // Per-Kelas
-const selKelasPerKelas = $('#kelas-per-kelas');
-const tbodyPerKelas    = $('#tbodyPerKelas');
-const btnSimpanKelas   = $('#btnSimpanKelas');
+const selKelasPerKelas = document.querySelector('#kelas-per-kelas') || document.querySelector('#selectKelas');
+const tbodyPerKelas    = document.querySelector('#tbodyPerKelas')   || document.querySelector('#tbodyKelas');
+const btnSimpanKelas   = document.querySelector('#btnSimpanKelas');
 
 // Per-Santri
-const selKelasPerSantri  = $('#kelas-per-santri');
-const selSantri          = $('#selectSantri');
-const pelanggaranSantri  = $('#pelanggaranSantri');
-const pelanggaranSantriLain = $('#pelanggaranSantriLain');
-const jamSantri          = $('#jamSantri');
-const tanggalSantri      = $('#tanggalSantri');
-const notesSantri        = $('#notesSantri');
-const btnSimpanSantri    = $('#btnSimpanSantri');
+const selKelasPerSantri   = document.querySelector('#kelas-per-santri') || document.querySelector('#sanKelas');
+const selSantri           = document.querySelector('#selectSantri')     || document.querySelector('#sanSantri');
+const pelanggaranSantri   = document.querySelector('#pelanggaranSantri')|| document.querySelector('#sanViolSel');
+const pelanggaranSantriLain = document.querySelector('#pelanggaranSantriLain') || document.querySelector('#sanViolCustom');
+const jamSantri           = document.querySelector('#jamSantri')        || document.querySelector('#sanJam');
+const tanggalSantri       = document.querySelector('#tanggalSantri')    || document.querySelector('#sanTanggal');
+const notesSantri         = document.querySelector('#notesSantri')      || document.querySelector('#sanKet');
+const btnSimpanSantri     = document.querySelector('#btnSimpanSantri')  || document.querySelector('#sanSimpan');
 
-// Laporan (filter + tabel tampilan)
-const filterKelas   = $('#filterKelas');
-const filterSantri  = $('#filterSantri');
-const filterBulan   = $('#filterBulan');
-const filterTahun   = $('#filterTahun');
-const btnTampilkan  = $('#btnTampilkan');
-const btnCetak      = $('#btnCetak');
-const btnPdfWa      = $('#btnPdfWa');
+// Laporan / Tampilan & Cetak
+const filterKelas  = document.querySelector('#filterKelas') || document.querySelector('#lapKelas');
+const filterSantri = document.querySelector('#filterSantri')|| document.querySelector('#lapSantri');
+const filterBulan  = document.querySelector('#filterBulan') || document.querySelector('#lapBulan');
+const filterTahun  = document.querySelector('#filterTahun') || document.querySelector('#lapTahun');
+const btnTampilkan = document.querySelector('#btnTampilkan');
+const btnCetak     = document.querySelector('#btnCetak');
+const btnPdfWa     = document.querySelector('#btnPdfWa');
 
-const lapWrap       = $('#lap-wrap');
-const lapTitle      = $('#lap-title');
-const lapSubtitle   = $('#lap-subtitle');
-const lapMeta       = $('#lap-meta');
-const tbodyLaporanView = $('#tbodyLaporanView');
+const lapWrap     = document.querySelector('#lap-wrap');
+const lapTitle    = document.querySelector('#lap-title');
+const lapSubtitle = document.querySelector('#lap-subtitle');
+const lapMeta     = document.querySelector('#lap-meta');
+const tbodyLaporanView = document.querySelector('#tbodyLaporanView') || document.querySelector('#tbodyLaporan');
+
 
 // ======================= DATA & HELPER =======================
 let kelasList = [];       // [{id, kelas, wali_name, wali_phone}, ...]
@@ -265,5 +265,14 @@ btnSimpanSantri?.addEventListener('click', async ()=>{
 });
 
 // ===== END: bootstrap awal =====
+
+// ===== Inisialisasi awal =====
+try {
+  showPanel?.('kelas');           // tampilkan tab "Input per Kelas" saat load
+  await loadKelasSemua();         // <-- penting: isi semua dropdown kelas
+} catch (e) {
+  showAlert(e.message || 'Gagal memuat data awal', false);
+}
+
 
 // (lanjutan file kamu: fungsi render laporan, sort kolom, generate PDF & kirim WA, hapus data, dll)
