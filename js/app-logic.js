@@ -334,6 +334,13 @@ let lastLaporan = [];           // cache hasil query tampilkan
 let lastClassMeta = null;       // cache info kelas terpilih (wali)
 
 /******************** POPULATE FILTER LAPORAN ********************/
+function updatePdfButtonsState() {
+  const isAll = !filterKelas?.value; // "" berarti 'Semua Kelas'
+  [btnPdfWa, btnCetak].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = isAll;
+    btn.classList.toggle('opacity-50', isAll);
+    btn.classList.toggle('cursor-not-allowed', isAll);
 async function loadFilterKelas() {
   // pakai list kelas yang sudah dimuat oleh loadKelasSemua() sebelumnya
   // isi "Semua Kelas" di paling atas
@@ -352,6 +359,11 @@ async function loadFilterKelas() {
       o.dataset.wali_name  = r.wali_name || '';
       o.dataset.wali_phone = r.wali_phone || '';
       filterKelas.add(o);
+      updatePdfButtonsState();
+
+  });
+}
+
     });
   }
 }
@@ -555,6 +567,11 @@ btnPdfWa?.addEventListener('click', async () => {
   showLoading('Menyiapkan PDF', 'Merender tabel laporan…');
 
   try {
+    if (!filterKelas?.value) {
+  hideLoading(); setBusy(btnPdfWa, false);
+  return showAlert('Pilih kelas tertentu dulu (bukan "Semua Kelas") sebelum membuat & mengirim PDF.', false);
+}
+
     if (!lastLaporan.length) {
       hideLoading(); setBusy(btnPdfWa,false);
       return showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
@@ -574,7 +591,9 @@ btnPdfWa?.addEventListener('click', async () => {
 
     // 2) upload
     showLoading('Mengunggah laporan', 'Mengirim file ke server…');
-    const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+    //const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+    const base64 = await blobToBase64(blob);
+
     const publicUrl = await uploadReport(opt.filename, base64);
 
     // 3) buka WA
@@ -607,6 +626,7 @@ btnTampilkan?.addEventListener('click', async () => {
 /******************** REAKSI PERUBAHAN KELAS (isi dropdown santri) ********************/
 filterKelas?.addEventListener('change', async () => {
   syncWaliFromFilter();
+  updatePdfButtonsState();
   await loadFilterSantriByClass(filterKelas.value || '');
 });
 
@@ -615,6 +635,7 @@ tabLap?.addEventListener('click', async () => {
   showPanel?.('lap');
   try {
     await loadFilterKelas();
+    updatePdfButtonsState();
     await loadFilterSantriByClass(filterKelas?.value || '');
   } catch (e) {
     showAlert(e.message || 'Gagal menyiapkan filter laporan', false);
