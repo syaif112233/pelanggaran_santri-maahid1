@@ -180,26 +180,38 @@ async function renderPerKelas(class_id){
 }
 
 // ======================= TAB SWITCHING =======================
-function showPanel(which){
-  panelKelas.classList.toggle('hidden', which!=='kelas');
-  panelSantri.classList.toggle('hidden', which!=='santri');
-  panelLap.classList.toggle('hidden', which!=='lap');
-
-  tabKelas.classList.toggle('border-blue-600', which==='kelas');
-  tabKelas.classList.toggle('text-blue-600', which==='kelas');
-  tabSantri.classList.toggle('border-blue-600', which==='santri');
-  tabSantri.classList.toggle('text-blue-600', which==='santri');
-  tabLap.classList.toggle('border-blue-600', which==='lap');
-  tabLap.classList.toggle('text-blue-600', which==='lap');
+function setActiveTab(btn, active) {
+  btn.classList.toggle('border-blue-600', active);
+  btn.classList.toggle('text-blue-600', active);
+  btn.classList.toggle('border-transparent', !active);
+  btn.classList.toggle('text-gray-600', !active);
 }
 
-tabKelas?.addEventListener('click', ()=>showPanel('kelas'));
-tabSantri?.addEventListener('click', ()=>{
-  showPanel('santri');
-  if (tanggalSantri && !tanggalSantri.value) tanggalSantri.value = todayStr();
-});
+function showPanel(which) {
+  panelKelas.classList.toggle('hidden', which !== 'kelas');
+  panelSantri.classList.toggle('hidden', which !== 'santri');
+  panelLap.classList.toggle('hidden', which !== 'lap');
 
-tabLap?.addEventListener('click',   ()=>showPanel('lap'));
+  setActiveTab(tabKelas, which === 'kelas');
+  setActiveTab(tabSantri, which === 'santri');
+  setActiveTab(tabLap, which === 'lap');
+}
+
+tabKelas?.addEventListener('click', () => showPanel('kelas'));
+tabSantri?.addEventListener('click', () => {
+  showPanel('santri');
+  if (tanggalSantri && !tanggalSantri.value)
+    tanggalSantri.value = todayStr(); // default tanggal hari ini
+});
+tabLap?.addEventListener('click', async () => {
+  showPanel('lap');
+  try {
+    await loadFilterKelas();
+    await loadFilterSantriByClass(filterKelas?.value || '');
+  } catch (e) {
+    showAlert(e.message || 'Gagal menyiapkan filter laporan', false);
+  }
+});
 
 // ======================= EVENT LISTENERS UTAMA =======================
 // Per-kelas
