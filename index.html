@@ -4,11 +4,17 @@
   <meta charset="UTF-8" />
   <title>Sistem Pelanggaran Santri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind (CDN) -->
+
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Print A4 landscape khusus kontainer laporan -->
+  <!-- jsPDF + AutoTable (tanpa html2canvas) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+
   <style>
+    /* Print A4 landscape */
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body * { visibility: hidden !important; }
@@ -17,10 +23,9 @@
       #lap-table thead { display: table-header-group; }
       #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
     }
+    th[data-sort] { cursor: pointer; user-select: none; }
+    .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
   </style>
-
-  <!-- html2pdf (untuk generate PDF di browser) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 </head>
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-6">
