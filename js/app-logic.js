@@ -530,7 +530,7 @@ btnPdfWa?.addEventListener('click', async () => {
 
     // upload
     showLoading('Mengunggah laporan', 'Mengirim file ke server…');
-    const buffer = await blob.arrayBuffer();
+    //const buffer = await blob.arrayBuffer();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
     const res = await fetch('/api/upload-report', {
       method: 'POST',
