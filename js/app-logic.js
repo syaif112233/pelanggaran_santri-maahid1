@@ -478,9 +478,10 @@ function getLapContainerForPdf() {
 }
 
 async function ensureHtml2Pdf() {
-  if (typeof html2pdf === 'function') return;
+  if (typeof window.html2pdf === 'function' || typeof window.html2pdf === 'object') return;
   throw new Error('html2pdf belum termuat');
 }
+
 
 function blobToBase64(blob){
   return new Promise((resolve, reject)=>{
@@ -519,12 +520,14 @@ btnPdfWa?.addEventListener('click', async () => {
 
     // ⬇️ Versi 0.10.x: TANPA argumen pada .get('pdf')
     showLoading('Membuat PDF', 'Mohon tunggu…');
-    const blob = await html2pdf()
-      .set(opt)
-      .from(sourceEl)
-      .toPdf()
-      .get('pdf')
-      .then(pdf => pdf.output('blob'));
+    // pastikan elemen sumber ada
+    if (!sourceEl) throw new Error('Elemen laporan tidak ditemukan.');
+    
+    // pisahkan jadi 2 langkah: ambil pdf dulu, lalu blob
+    const instance = html2pdf().set(opt).from(sourceEl).toPdf();
+    const pdf = await instance.get('pdf');   // tanpa argumen callback
+    const blob = pdf.output('blob');
+
 
     document.body.classList.remove('pdf-mode');
 
