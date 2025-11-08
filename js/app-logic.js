@@ -124,9 +124,9 @@ async function loadKelasSemua() {
   // Isi dropdown: per-santri
   selKelasPerSantri.innerHTML = kelasList.map(k=>`<option value="${k.id}">${k.kelas}</option>`).join('');
 
-  // Isi dropdown: filter laporan (dengan "Semua Kelas")
-  filterKelas.innerHTML = `<option value="">Semua Kelas</option>` +
-    kelasList.map(k=>`<option value="${k.id}">${k.kelas}</option>`).join('');
+  // // Isi dropdown: filter laporan (dengan "Semua Kelas")
+  // filterKelas.innerHTML = `<option value="">Semua Kelas</option>` +
+  //   kelasList.map(k=>`<option value="${k.id}">${k.kelas}</option>`).join('');
 
   // Trigger awal
   if (selKelasPerKelas.value) await renderPerKelas(selKelasPerKelas.value);
