@@ -635,19 +635,61 @@ async function ensureHtml2Pdf() {
   throw new Error('html2pdf belum termuat');
 }
 
+// async function generatePdfBlob(sourceEl, opt) {
+//   await ensureHtml2Pdf();
+//   if (!sourceEl) throw new Error('Elemen laporan tidak ditemukan.');
+
+//   document.body.classList.add('pdf-mode');
+
+//   const instance = html2pdf().set(opt).from(sourceEl).toPdf();
+//   const pdf = await instance.get('pdf');  // html2pdf v0.10.x → TANPA callback
+//   const blob = pdf.output('blob');
+
+//   document.body.classList.remove('pdf-mode');
+//   return blob;
+// }
+// PATCH: generatePdfBlob aman untuk mobile (force light, tunggu font)
 async function generatePdfBlob(sourceEl, opt) {
   await ensureHtml2Pdf();
   if (!sourceEl) throw new Error('Elemen laporan tidak ditemukan.');
 
+  // Pastikan font siap (mencegah teks hilang)
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch {}
+  }
+
+  // Paksa light mode saat capture
+  document.documentElement.classList.add('pdf-mode');
   document.body.classList.add('pdf-mode');
 
-  const instance = html2pdf().set(opt).from(sourceEl).toPdf();
-  const pdf = await instance.get('pdf');  // html2pdf v0.10.x → TANPA callback
+  // Pastikan style sudah ter-apply
+  await new Promise(r => setTimeout(r, 50));
+
+  // Opsi html2canvas "defensif"
+  const mergedOpt = {
+    margin: 10,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      letterRendering: true
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak: { mode: ['css', 'legacy'] },
+    ...(opt || {})
+  };
+
+  const instance = html2pdf().set(mergedOpt).from(sourceEl).toPdf();
+  const pdf = await instance.get('pdf');
   const blob = pdf.output('blob');
 
   document.body.classList.remove('pdf-mode');
+  document.documentElement.classList.remove('pdf-mode');
+
   return blob;
 }
+
 
 //function arrayBufferToBase64(buffer) {
 //  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -737,11 +779,17 @@ btnPdfWa?.addEventListener('click', async () => {
     }
 
     const sourceEl = getLapContainerForPdf();
+    // const opt = {
+    //   margin: 10,
+    //   filename: `laporan-pelanggaran-${Date.now()}.pdf`,
+    //   image: { type: 'jpeg', quality: 0.98 },
+    //   html2canvas: { scale: 2 },
+    //   jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    // };
     const opt = {
       margin: 10,
       filename: `laporan-pelanggaran-${Date.now()}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
 
