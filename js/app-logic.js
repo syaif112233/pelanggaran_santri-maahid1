@@ -335,65 +335,85 @@ function ensureHtml2Pdf() {
 }
 
 /* ===== handler PDF + WA: kirim ke wali kelas (nama & nomor) ===== */
-btnKirimWa.addEventListener('click', async () => {
+btnPdfWa.addEventListener('click', async () => {
   try {
-    await ensureHtml2Pdf()
+    await ensureHtml2Pdf();
   } catch (e) {
-    showAlert(e.message || 'html2pdf belum dimuat', false)
-    return
-  }
-  if (!lastData.length) {
-    showAlert('Tampilkan data dulu sebelum membuat PDF.', false)
-    return
+    showAlert(e.message || 'html2pdf belum dimuat', false);
+    return;
   }
 
+  if (!lastData || !lastData.length) {
+    showAlert('Tampilkan data dulu sebelum membuat PDF.', false);
+    return;
+  }
+
+  // Kecilkan beban render: scale=1 + batasi lebar dengan CSS (#lap-wrap)
   const opt = {
     margin: 10,
     filename: `laporan-pelanggaran-${Date.now()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: {
+      scale: 1,             // penting: jangan 2
+      useCORS: true,
+      allowTaint: true,
+      letterRendering: true,
+      // bantu html2canvas “tahu” lebar target:
+      windowWidth: document.getElementById('lap-wrap').scrollWidth
+    },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }
+  };
 
-  // ambil blob secara aman (menghindari RangeError)
-  const blob = await window.html2pdf()
-    .set(opt)
-    .from(lapWrap)
-    .toPdf()
-    .get('pdf')
-    .then(pdf => pdf.output('blob'))
-
-  const buf = await blob.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+  const lapWrap = document.getElementById('lap-wrap');
 
   try {
+    // Cara chaining yang benar di v0.10.x untuk ambil Blob
+    const blob = await html2pdf()
+      .set(opt)
+      .from(lapWrap)
+      .toPdf()
+      .get('pdf')
+      .then(pdf => pdf.output('blob'));
+
+    // -> base64
+    const buf = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+    // Upload ke API kamu (pastikan route sudah 200 OK dan balas JSON)
     const res = await fetch('/api/upload-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename: opt.filename, base64 })
-    })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json?.error || 'Upload gagal')
+    });
 
-    const url = json.publicUrl
+    let json;
+    try {
+      json = await res.json();
+    } catch {
+      throw new Error('Upload gagal (balasan bukan JSON).');
+    }
+    if (!res.ok) throw new Error(json?.error || 'Upload gagal.');
 
-    // nomor & nama wali kelas dari classes
-    const kelasId = lapKelas.value || null
-    const kelasObj = kelasId ? CLASS_MAP.get(kelasId) : null
-    const waliName  = kelasObj?.wali_name || 'Wali Kelas'
-    const waliPhone = toWa62(kelasObj?.wali_phone)
+    const url = json.publicUrl;
+    showAlert('PDF berhasil dibuat & di-upload.', true);
 
-    const ringkasan = lapSubtitle?.textContent?.trim() || ''
-    const pesan = `Assalamu'alaikum ${waliName}. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
-    const waText = encodeURIComponent(pesan)
-    const waUrl  = waliPhone ? `https://wa.me/${waliPhone}?text=${waText}` : `https://wa.me/?text=${waText}`
+    // Kirim ke WA (pakai ringkasan yang ada di subjudul)
+    const ringkasan = (document.getElementById('lap-subtitle')?.textContent || '').trim();
+    const text = encodeURIComponent(
+      `Assalamu'alaikum. Berikut laporan pelanggaran santri (${ringkasan}). PDF: ${url}`
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank');
 
-    window.open(waUrl, '_blank')
-    showAlert('PDF berhasil dibuat & tautan WA dibuka.', true)
-  } catch (e) {
-    showAlert(e.message || 'Gagal upload PDF', false)
+  } catch (err) {
+    // Jika tetap kena error html2canvas (RangeError), kasih fallback simpan lokal
+    console.error(err);
+    showAlert(err.message || 'Gagal membuat/ mengunggah PDF', false);
+
+    // Fallback opsional: buka dialog simpan PDF di browser
+    // await html2pdf().set(opt).from(lapWrap).save();
   }
-})
+});
+
 
   async function ensureHtml2Pdf(){
   if (window.html2pdf) return;
