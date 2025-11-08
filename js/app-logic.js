@@ -2,6 +2,9 @@
    Versi full – laporan + input + kirim WA
    Menggunakan window.supabase dari js/supabaseClient.js
 */
+// paling atas app-logic.js (sebelum kode lain)
+const supabase = window.supabase;
+
 
 /////////////////////// UTIL ///////////////////////
 const $ = (sel) => document.querySelector(sel);
