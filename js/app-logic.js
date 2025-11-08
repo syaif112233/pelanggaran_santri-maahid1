@@ -3,7 +3,24 @@
    Menggunakan window.supabase dari js/supabaseClient.js
 */
 // paling atas app-logic.js (sebelum kode lain)
-const supabase = window.supabase;
+// --- ambil klien supabase dari global dan pastikan siap ---
+async function getSupabase() {
+  if (window.supabase) return window.supabase;
+
+  // tunggu event dari supabaseClient.js (maks 3 detik)
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Supabase client belum siap')), 3000);
+    window.addEventListener('supabase-ready', () => {
+      clearTimeout(t);
+      resolve();
+    }, { once: true });
+  });
+
+  return window.supabase;
+}
+
+// gunakan satu instance di seluruh file
+const supabase = await getSupabase();
 
 
 /////////////////////// UTIL ///////////////////////
