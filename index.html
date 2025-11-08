@@ -4,13 +4,17 @@
   <meta charset="UTF-8" />
   <title>Sistem Pelanggaran Santri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind -->
+  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- html2pdf (wajib untuk fitur PDF) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- jsPDF + AutoTable (dipakai kalau mau opsi cetak PDF alternatif) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <!-- html2pdf (untuk generate PDF di browser) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 
   <style>
-    /* Cetak A4 landscape */
+    /* Print A4 landscape */
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body * { visibility: hidden !important; }
@@ -19,15 +23,9 @@
       #lap-table thead { display: table-header-group; }
       #lap-table tr, #lap-table th, #lap-table td { page-break-inside: avoid; }
     }
-    th[data-sort] { cursor: pointer; user-select: none; }
+    th[data-sort] { cursor:pointer; user-select:none; }
     .sort-ico { font-size:.9em; opacity:.7; margin-left:6px; }
-
-    /* Penting untuk mencegah RangeError html2canvas: batasi lebar area render */
-    #lap-wrap {
-      width: 1122px;      /* ≈ A4 landscape pada ~96dpi */
-      margin: 0 auto;
-      background: #fff;
-    }
+    .hidden-input { display:none; }
   </style>
 </head>
 
@@ -37,8 +35,8 @@
 
     <!-- Tabs -->
     <div class="flex gap-4 border-b mb-6">
-      <button id="tab-kelas"   class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
-      <button id="tab-santri"  class="py-2 text-gray-600">Input per Santri</button>
+      <button id="tab-kelas" class="py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Input per Kelas</button>
+      <button id="tab-santri" class="py-2 text-gray-600">Input per Santri</button>
       <button id="tab-laporan" class="py-2 text-gray-600">Tampilkan & Cetak</button>
     </div>
 
@@ -88,7 +86,11 @@
       <div class="grid md:grid-cols-2 gap-4 mt-4">
         <div>
           <label class="block font-semibold mb-1">Pelanggaran</label>
-          <input id="sanPelanggaran" class="w-full border rounded px-3 py-2" />
+          <!-- dropdown + input "lainnya" yang muncul kondisional -->
+          <div class="flex gap-2">
+            <select id="sanViolSel" class="w-1/2 border rounded px-3 py-2"></select>
+            <input id="sanViolCustom" class="w-1/2 border rounded px-3 py-2 hidden-input" placeholder="Isi detail jika pilih 'Lainnya'">
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -145,31 +147,33 @@
 
       <div class="flex gap-3 mb-3">
         <button id="btnTampilkan" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Tampilkan</button>
-        <button id="btnCetak" class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-800">Cetak</button>
+        <button id="btnCetak" class="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700">Cetak</button>
         <button id="btnPdfWa" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Buat PDF & Kirim WA</button>
       </div>
 
-      <!-- Area yang dirender jadi PDF -->
-      <div id="lap-wrap" class="shadow rounded bg-white p-4">
-        <h3 id="lap-title" class="text-xl font-semibold text-center">Laporan Pelanggaran Santri</h3>
-        <p id="lap-subtitle" class="text-center text-sm text-gray-600 mb-3"></p>
-
-        <div class="overflow-x-auto">
-          <table id="lap-table" class="w-full bg-white border">
-            <thead class="bg-gray-100">
-              <tr>
-                <th class="p-2 border">No</th>
-                <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico" id="ico-student_name"></span></th>
-                <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico" id="ico-kelas"></span></th>
-                <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico" id="ico-violation"></span></th>
-                <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico" id="ico-date_at"></span></th>
-                <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico" id="ico-time_at"></span></th>
-                <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico" id="ico-notes"></span></th>
-              </tr>
-            </thead>
-            <tbody id="tbodyLaporan"></tbody>
-          </table>
+      <!-- area yang diprint / di-PDF -->
+      <div id="lap-wrap" class="overflow-x-auto mt-4 bg-white border rounded">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <h3 class="text-xl font-semibold">Laporan Pelanggaran Santri</h3>
+          <div id="lap-title" class="hidden"></div>
+          <div id="lap-subtitle" class="text-sm text-gray-600"></div>
+          <div id="lap-meta" class="text-xs text-gray-500"></div>
         </div>
+        <table id="lap-table" class="w-full bg-white border">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="p-2 border">No</th>
+              <th class="p-2 border" data-sort="student_name">Nama Santri <span class="sort-ico" id="ico-student_name"></span></th>
+              <th class="p-2 border" data-sort="kelas">Kelas <span class="sort-ico" id="ico-kelas"></span></th>
+              <th class="p-2 border" data-sort="violation">Pelanggaran <span class="sort-ico" id="ico-violation"></span></th>
+              <th class="p-2 border" data-sort="date_at">Tanggal <span class="sort-ico" id="ico-date_at"></span></th>
+              <th class="p-2 border" data-sort="time_at">Jam <span class="sort-ico" id="ico-time_at"></span></th>
+              <th class="p-2 border" data-sort="notes">Keterangan <span class="sort-ico" id="ico-notes"></span></th>
+              <th class="p-2 border">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyLaporan"></tbody>
+        </table>
       </div>
     </section>
   </div>
